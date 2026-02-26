@@ -6,6 +6,8 @@
 <title>Mango Lovers — Inventory System</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="ml-inventory.css">
+<!-- Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
@@ -40,10 +42,10 @@
         <span class="icon nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
         Categories
       </div>
-      <div class="nav-item" data-page="warehouses">
+      <!-- <div class="nav-item" data-page="warehouses">
         <span class="icon nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
         Warehouses
-      </div>
+      </div> -->
       <div class="nav-item" data-page="adjustments">
         <span class="icon nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg></span>
         Adjustments
@@ -134,6 +136,7 @@
   </header>
 
   <div class="content">
+    <div id="db-status-banner" style="display:none"></div>
 
     <!-- ══ DASHBOARD ══ -->
     <div class="page-section active" id="page-dashboard">
@@ -298,7 +301,7 @@
       </div>
     </div>
 
-    <!-- ══ WAREHOUSES ══ -->
+    <!-- ══ WAREHOUSES ══
     <div class="page-section" id="page-warehouses">
       <div class="section-hdr">
         <div><h2>Warehouses</h2><p>Storage locations</p></div>
@@ -317,7 +320,7 @@
           <tr><td><strong>Distribution Hub</strong></td><td style="color:var(--text-soft)">Sylhet, BD</td><td class="mono">15,000 units</td><td><div class="sbar-wrap"><span class="mono" style="font-size:12.5px">11,900</span><div class="sbar"><div class="sfill sr" style="width:79%"></div></div></div></td><td>Rafiq Ahmed</td><td><span class="badge b-mango"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>Near Full</span></td></tr>
         </tbody>
       </table></div></div>
-    </div>
+    </div> -->
 
     <!-- ══ ADJUSTMENTS ══ -->
     <div class="page-section" id="page-adjustments">
@@ -511,6 +514,14 @@
 
 <script src="ml-inventory.js">
 
+</script>
+<script src="ml-supabase.js"></script>
+<script src="ml-features.js"></script>
+<script>
+  // Boot Supabase after everything is rendered
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(initSupabase, 200);
+  });
 </script>
 </body>
 </html>
