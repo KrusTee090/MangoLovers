@@ -21,12 +21,18 @@ const products=[
    iconSvg:'<path d="M5 4h1a3 3 0 0 1 3 3 3 3 0 0 1 3-3h1"/><path d="M13 20H6a2 2 0 0 1-2-2V6"/><path d="M13 20a2 2 0 0 0 2-2V6"/><line x1="9" y1="7" x2="9" y2="7"/>'},
 ];
 const recentSales=[
-  {id:'INV-2024-1842',customer:'Rafiq Ahmed',items:3,total:847.97,payment:'Cash',status:'Completed',date:'2024-02-15 14:32'},
-  {id:'INV-2024-1841',customer:'Nadia Islam',items:1,total:1299.99,payment:'Card',status:'Completed',date:'2024-02-15 13:18'},
-  {id:'INV-2024-1840',customer:'Karim Miah',items:5,total:174.95,payment:'Mobile Banking',status:'Pending',date:'2024-02-15 12:05'},
-  {id:'INV-2024-1839',customer:'Fatema Begum',items:2,total:549.98,payment:'Card',status:'Completed',date:'2024-02-15 10:47'},
-  {id:'INV-2024-1838',customer:'Tanvir Hossain',items:4,total:399.96,payment:'Cash',status:'Refunded',date:'2024-02-15 09:22'},
-  {id:'INV-2024-1837',customer:'Sara Chowdhury',items:1,total:459.99,payment:'Mobile Banking',status:'Completed',date:'2024-02-14 18:55'},
+  {id:'INV-2024-1842',customer:'Rafiq Ahmed',items:3,total:847.97,payment:'Cash',status:'Completed',date:'2024-02-15 14:32',
+   lineItems:[{name:'Sony WH-1000XM5',qty:1,unitPrice:399.99,subtotal:399.99},{name:'Premium Cotton T-Shirt',qty:4,unitPrice:24.99,subtotal:99.96},{name:'Organic Green Tea 100g',qty:3,unitPrice:12.99,subtotal:38.97}]},
+  {id:'INV-2024-1841',customer:'Nadia Islam',items:1,total:1299.99,payment:'Card',status:'Completed',date:'2024-02-15 13:18',
+   lineItems:[{name:'MacBook Air M3',qty:1,unitPrice:1299.99,subtotal:1299.99}]},
+  {id:'INV-2024-1840',customer:'Karim Miah',items:5,total:174.95,payment:'Mobile Banking',status:'Pending',date:'2024-02-15 12:05',
+   lineItems:[{name:'Organic Green Tea 100g',qty:5,unitPrice:12.99,subtotal:64.95},{name:'Premium Cotton T-Shirt',qty:4,unitPrice:24.99,subtotal:99.96},{name:'Nike Air Max 270',qty:0,unitPrice:0,subtotal:10.04}]},
+  {id:'INV-2024-1839',customer:'Fatema Begum',items:2,total:549.98,payment:'Card',status:'Completed',date:'2024-02-15 10:47',
+   lineItems:[{name:'Ergonomic Office Chair',qty:1,unitPrice:549.99,subtotal:549.98}]},
+  {id:'INV-2024-1838',customer:'Tanvir Hossain',items:4,total:399.96,payment:'Cash',status:'Refunded',date:'2024-02-15 09:22',
+   lineItems:[{name:'Premium Cotton T-Shirt',qty:4,unitPrice:24.99,subtotal:99.96},{name:'Logitech MX Master 3S',qty:3,unitPrice:99.99,subtotal:299.97}]},
+  {id:'INV-2024-1837',customer:'Sara Chowdhury',items:1,total:459.99,payment:'Mobile Banking',status:'Completed',date:'2024-02-14 18:55',
+   lineItems:[{name:'Samsung 4K Monitor 27"',qty:1,unitPrice:459.99,subtotal:459.99}]},
 ];
 const purchases=[
   {id:'PO-2024-0412',supplier:'TechWorld Distributors',items:4,total:12480,status:'Received',date:'2024-02-13',dueDate:'2024-03-13'},
@@ -50,6 +56,10 @@ const suppliersData=[
   {id:'SUP-005',name:'FurniCo Ltd',category:'Home & Living',contact:'+880-1512-678901',totalPurchases:28400,outstanding:2240,status:'Inactive'},
   {id:'SUP-006',name:'Samsung BD',category:'Electronics',contact:'+880-1312-789012',totalPurchases:67000,outstanding:0,status:'Active'},
 ];
+
+/* ── Returns data (populated by Supabase or locally) ── */
+let salesReturns = [];
+let purchaseReturns = [];
 
 /* ── SVG helpers ── */
 const svgIcon = (path,size=14,color='currentColor') =>
@@ -103,7 +113,8 @@ const pageCfg = {
   adjustments:{title:'Adjustments',sub:'Manual stock corrections',   act:'New Adjustment'},
   sales:      {title:'Sales',      sub:'Manage all transactions',    act:'New Sale'},
   purchases:  {title:'Purchases',  sub:'Purchase orders',            act:'New PO'},
-  returns:    {title:'Returns',    sub:'Manage product returns',     act:'New Return'},
+  'sales-returns':   {title:'Sales Returns',    sub:'Customer returns & refunds', act:'New Return'},
+  'purchase-returns': {title:'Purchase Returns', sub:'Returns to suppliers',       act:'New Return'},
   customers:  {title:'Customers',  sub:'5 registered customers',     act:'Add Customer'},
   suppliers:  {title:'Suppliers',  sub:'6 registered suppliers',     act:'Add Supplier'},
   reports:    {title:'Reports',    sub:'Analytics overview',         act:'Download'},
@@ -125,6 +136,10 @@ function navigate(page) {
   if(cfg.act){btn.style.display='';btn.childNodes[1]&&(btn.childNodes[1].textContent=' '+cfg.act);}
   else btn.style.display='none';
   window.scrollTo(0,0);
+  /* Refresh Purchase & Sell Report when navigating to it */
+  if (page === 'Purchase and Sell Report' && typeof loadSalesPurchaseReport === 'function') {
+    loadSalesPurchaseReport();
+  }
 }
 document.querySelectorAll('.nav-item[data-page]').forEach(n=>n.addEventListener('click',()=>navigate(n.dataset.page)));
 
@@ -412,12 +427,12 @@ function runPageLoadAnimations() {
 
 /* ── RENDER FUNCTIONS ── */
 function renderRecentSales(){
-  document.getElementById('recentSalesTbody').innerHTML=recentSales.map(s=>`<tr>
+  document.getElementById('recentSalesTbody').innerHTML=recentSales.map(s=>`<tr style="cursor:pointer" onclick="viewInvoice(recentSales.find(x=>x.id==='${s.id}'))">
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${s.id}</span></td>
     <td><div style="display:flex;align-items:center;gap:7px">
       <div style="width:24px;height:24px;border-radius:50%;background:var(--mango-bg);border:1px solid rgba(245,166,35,.25);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--mango-dk);flex-shrink:0">${s.customer[0]}</div>
       <span>${s.customer}</span></div></td>
-    <td class="mono" style="color:var(--text-soft)">${s.items}</td>
+    <td><div style="font-size:11.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.itemSummary||''}"><span class="mono" style="color:var(--text-soft)">${s.items}</span> · ${s.itemSummary||'—'}</div></td>
     <td><span class="mono" style="font-weight:700">৳${fmt(s.total)}</span></td>
     <td><span style="font-size:11.5px;${paymentColor(s.payment)}">${s.payment}</span></td>
     <td>${statusBadge(s.status)}</td>
@@ -475,9 +490,9 @@ function renderProducts(){
       <td><span class="mono" style="color:var(--text-soft)">৳${p.cost.toFixed(2)}</span></td>
       <td>${statusBadge(p.status)}</td>
       <td><div class="act-group">
-        <button class="act-btn" title="View">${svgIcon(eyeSvg,12)}</button>
-        <button class="act-btn edit" title="Edit">${svgIcon(editSvg,12)}</button>
-        <button class="act-btn danger" title="Delete">${svgIcon(trashSvg,12)}</button>
+        <button class="act-btn" title="View" onclick="_prodAction('view','${p.id}')">${svgIcon(eyeSvg,12)}</button>
+        <button class="act-btn edit" title="Edit" onclick="_prodAction('edit','${p.id}')">${svgIcon(editSvg,12)}</button>
+        <button class="act-btn danger" title="Delete" onclick="_prodAction('delete','${p.id}')">${svgIcon(trashSvg,12)}</button>
       </div></td>
     </tr>`;
   }).join('');
@@ -517,33 +532,59 @@ function renderSalesTable(){
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${s.id}</span></td>
     <td><div style="display:flex;align-items:center;gap:7px">
       <div style="width:26px;height:26px;border-radius:50%;background:var(--mango-bg);border:1px solid rgba(245,166,35,.25);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:var(--mango-dk);flex-shrink:0">${s.customer[0]}</div>${s.customer}</div></td>
-    <td class="mono" style="color:var(--text-soft)">${s.items}</td>
+    <td><div style="font-size:11.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.itemSummary||''}"><span class="mono" style="color:var(--text-soft)">${s.items}</span> · ${s.itemSummary||'—'}</div></td>
     <td><span class="mono" style="font-weight:700">৳${fmt(s.total)}</span></td>
     <td><span style="font-size:11.5px;${paymentColor(s.payment)}">${s.payment}</span></td>
     <td>${statusBadge(s.status)}</td>
     <td><span class="mono" style="font-size:10.5px;color:var(--text-faint)">${s.date}</span></td>
     <td><div class="act-group">
-      <button class="act-btn" title="View">${svgIcon(eyeSvg,12)}</button>
-      <button class="act-btn" title="Print">${svgIcon(printSvg,12)}</button>
-      <button class="act-btn danger" title="Return">${svgIcon(rotateSvg,12)}</button>
+      <button class="act-btn" title="View" onclick="viewInvoice(recentSales.find(x=>x.id==='${s.id}'))">${svgIcon(eyeSvg,12)}</button>
+      <button class="act-btn" title="Print" onclick="printSale(recentSales.find(x=>x.id==='${s.id}'))">${svgIcon(printSvg,12)}</button>
+      <button class="act-btn danger" title="Return" onclick="toast('Return initiated for ${s.id}','info')">${svgIcon(rotateSvg,12)}</button>
     </div></td>
   </tr>`).join('');
 }
 document.getElementById('salesSearch').addEventListener('input',renderSalesTable);
+document.getElementById('purchasesSearch')?.addEventListener('input',renderPurchases);
+
+let _purchaseStatusFilter = 'All';
+
+function filterPurchases(status, el) {
+  _purchaseStatusFilter = status;
+  document.querySelectorAll('#page-purchases .pill').forEach(p => p.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderPurchases();
+}
 
 function renderPurchases(){
-  document.getElementById('purchasesTbody').innerHTML=purchases.map((po,i)=>`<tr style="animation:fadeUp .3s ease ${i*55}ms both">
+  const search = (document.getElementById('purchasesSearch')?.value || '').toLowerCase();
+  const filtered = purchases.filter(po => {
+    const matchStatus = _purchaseStatusFilter === 'All' || po.status === _purchaseStatusFilter;
+    const matchSearch = !search ||
+      po.id.toLowerCase().includes(search) ||
+      po.supplier.toLowerCase().includes(search) ||
+      (po.itemSummary || '').toLowerCase().includes(search);
+    return matchStatus && matchSearch;
+  });
+
+  if (filtered.length === 0) {
+    document.getElementById('purchasesTbody').innerHTML =
+      `<tr><td colspan="8" style="text-align:center;color:var(--text-soft);padding:24px">No purchase orders found.</td></tr>`;
+    return;
+  }
+
+  document.getElementById('purchasesTbody').innerHTML=filtered.map((po,i)=>`<tr style="animation:fadeUp .3s ease ${i*55}ms both">
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${po.id}</span></td>
     <td style="font-weight:600">${po.supplier}</td>
-    <td class="mono" style="color:var(--text-soft)">${po.items}</td>
+    <td><div style="font-size:11.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${po.itemSummary||''}"><span class="mono" style="color:var(--text-soft)">${po.items}</span> · ${po.itemSummary||'—'}</div></td>
     <td><span class="mono" style="font-weight:700">৳${po.total.toLocaleString()}</span></td>
     <td>${statusBadge(po.status)}</td>
     <td><span class="mono" style="font-size:11.5px;color:var(--text-soft)">${po.date}</span></td>
     <td><span class="mono" style="font-size:11.5px;${po.status==='Overdue'?'color:var(--red);font-weight:700':'color:var(--text-soft)'}">${po.dueDate}</span></td>
     <td><div class="act-group">
-      <button class="act-btn">${svgIcon(eyeSvg,12)}</button>
-      <button class="act-btn edit">${svgIcon(editSvg,12)}</button>
-      <button class="act-btn ok">${svgIcon(checkSvg,12)}</button>
+      <button class="act-btn" title="View" onclick="_poAction('view',purchases.indexOf(po))">${svgIcon(eyeSvg,12)}</button>
+      <button class="act-btn" title="Print" onclick="_poAction('print',purchases.indexOf(po))">${svgIcon(printSvg,12)}</button>
+      <button class="act-btn ok" title="Update status" onclick="_poAction('confirm',purchases.indexOf(po))">${svgIcon(checkSvg,12)}</button>
     </div></td>
   </tr>`).join('');
 }
@@ -552,7 +593,7 @@ function renderCustomers(filter=''){
   const filt=customers.filter(c=>c.name.toLowerCase().includes(filter.toLowerCase())||c.phone.includes(filter));
   document.getElementById('customersSubtitle').textContent=`${filt.length} registered customers`;
   document.getElementById('customerGrid').innerHTML=filt.map((c,i)=>`
-    <div class="customer-card fade-up" style="animation-delay:${i*55}ms">
+    <div class="customer-card fade-up" style="animation-delay:${i*55}ms;cursor:pointer" onclick="_custAction(${i})">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:9px">
           <div class="cust-avatar">${c.name[0]}</div>
@@ -582,8 +623,8 @@ function renderSuppliers(){
     <td><span class="mono" style="${s.outstanding?'color:var(--red);font-weight:700':'color:var(--text-soft)'}">৳${s.outstanding.toLocaleString()}</span></td>
     <td>${statusBadge(s.status)}</td>
     <td><div class="act-group" style="opacity:1">
-      <button class="act-btn">${svgIcon(eyeSvg,12)}</button>
-      <button class="act-btn edit">${svgIcon(editSvg,12)}</button>
+      <button class="act-btn" title="View" onclick="_suppAction('view',${i})">${svgIcon(eyeSvg,12)}</button>
+      <button class="act-btn edit" title="Edit" onclick="_suppAction('edit',${i})">${svgIcon(editSvg,12)}</button>
     </div></td>
   </tr>`).join('');
 }
@@ -591,14 +632,14 @@ function renderSuppliers(){
 function renderInvoices(){
   document.getElementById('invoicesTbody').innerHTML=recentSales.map((s,i)=>`<tr style="animation:fadeUp .3s ease ${i*45}ms both">
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${s.id}</span></td>
-    <td>${s.customer}</td>
+    <td>${s.customer}<div style="font-size:10.5px;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px" title="${s.itemSummary||''}">${s.itemSummary||'—'}</div></td>
     <td><span class="mono" style="font-size:11.5px;color:var(--text-soft)">${s.date.split(' ')[0]}</span></td>
     <td><span class="mono" style="font-weight:700">৳${fmt(s.total)}</span></td>
     <td><span style="font-size:11.5px;${paymentColor(s.payment)}">${s.payment}</span></td>
     <td>${statusBadge(s.status)}</td>
     <td><div class="act-group" style="opacity:1">
-      <button class="act-btn">${svgIcon(eyeSvg,12)}</button>
-      <button class="act-btn">${svgIcon(printSvg,12)}</button>
+      <button class="act-btn" title="View" onclick="viewInvoice(recentSales.find(x=>x.id==='${s.id}'))">${svgIcon(eyeSvg,12)}</button>
+      <button class="act-btn" title="Print" onclick="printSale(recentSales.find(x=>x.id==='${s.id}'))">${svgIcon(printSvg,12)}</button>
     </div></td>
   </tr>`).join('');
 }
@@ -619,6 +660,63 @@ function renderReports(){
   </div>`).join('');
 }
 
+
+function renderSalesReturns(){
+  const tbody = document.getElementById('salesReturnsTbody');
+  if(!tbody) return;
+  const s_icon = '<polyline points="20 6 9 17 4 12"/>';
+  const c_icon = '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>';
+  tbody.innerHTML = salesReturns.map((r,i) => `<tr style="animation:fadeUp .3s ease ${i*45}ms both">
+    <td><span class="mono" style="color:var(--mint);font-size:11.5px">${r.id}</span></td>
+    <td><span class="mono" style="color:var(--text-soft);font-size:11.5px">${r.invoiceId}</span></td>
+    <td>${r.customer}</td>
+    <td style="font-size:12.5px">${r.product}</td>
+    <td class="mono">${r.qty}</td>
+    <td><span class="mono" style="font-weight:700;color:var(--red)">৳${r.refundAmt.toFixed(2)}</span></td>
+    <td style="font-size:12px;color:var(--text-soft)">${r.reason}</td>
+    <td>${statusBadge(r.status)}</td>
+    <td><div class="act-group">
+      <button class="act-btn" title="View" onclick="viewSalesReturn(salesReturns[${i}])">${svgIcon(eyeSvg,12)}</button>
+      <button class="act-btn" title="Print" onclick="printSalesReturn(salesReturns[${i}])">${svgIcon(printSvg,12)}</button>
+    </div></td>
+  </tr>`).join('');
+  // update stat counters
+  const pending   = salesReturns.filter(r=>r.status==='Pending').length;
+  const processed = salesReturns.filter(r=>r.status==='Processed').length;
+  const tc = document.getElementById('sr-total-count');
+  const pc = document.getElementById('sr-pending-count');
+  const rc = document.getElementById('sr-processed-count');
+  if(tc) tc.textContent = salesReturns.length;
+  if(pc) pc.textContent = pending;
+  if(rc) rc.textContent = processed;
+}
+
+function renderPurchaseReturns(){
+  const tbody = document.getElementById('purchaseReturnsTbody');
+  if(!tbody) return;
+  tbody.innerHTML = purchaseReturns.map((r,i) => `<tr style="animation:fadeUp .3s ease ${i*45}ms both">
+    <td><span class="mono" style="color:var(--mint);font-size:11.5px">${r.id}</span></td>
+    <td><span class="mono" style="color:var(--text-soft);font-size:11.5px">${r.poId}</span></td>
+    <td style="font-weight:600">${r.supplier}</td>
+    <td style="font-size:12.5px">${r.product}</td>
+    <td class="mono">${r.qty}</td>
+    <td><span class="mono" style="font-weight:700;color:var(--red)">৳${r.creditAmt.toFixed(2)}</span></td>
+    <td style="font-size:12px;color:var(--text-soft)">${r.reason}</td>
+    <td>${statusBadge(r.status)}</td>
+    <td><div class="act-group">
+      <button class="act-btn" title="View" onclick="viewPurchaseReturn(purchaseReturns[${i}])">${svgIcon(eyeSvg,12)}</button>
+      <button class="act-btn" title="Print" onclick="printPurchaseReturn(purchaseReturns[${i}])">${svgIcon(printSvg,12)}</button>
+    </div></td>
+  </tr>`).join('');
+  const pending  = purchaseReturns.filter(r=>r.status==='Pending').length;
+  const approved = purchaseReturns.filter(r=>r.status==='Approved').length;
+  const tc = document.getElementById('pr-total-count');
+  const pc = document.getElementById('pr-pending-count');
+  const ac = document.getElementById('pr-approved-count');
+  if(tc) tc.textContent = purchaseReturns.length;
+  if(pc) pc.textContent = pending;
+  if(ac) ac.textContent = approved;
+}
 function renderAnalytics(){
   const mxM=Math.max(...salesData.map(d=>d.sales));
   document.getElementById('analyticsMonthlySales').innerHTML=salesData.map(d=>`<div class="bar-col"><div class="bseg bs-sales" style="height:${Math.round((d.sales/mxM)*95)}px"></div><div class="bar-lbl">${d.month}</div></div>`).join('');
@@ -645,6 +743,7 @@ document.querySelectorAll('#page-dashboard .fade-up').forEach(el=>el.classList.r
 renderRecentSales(); renderStockAlerts();
 renderProducts(); renderCatPills(); renderCategories(); renderSalesTable();
 renderPurchases(); renderCustomers(); renderSuppliers(); renderInvoices();
+renderSalesReturns(); renderPurchaseReturns();
 renderReports(); renderAnalytics();
 
 // Charts render after layout is ready

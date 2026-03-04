@@ -229,26 +229,53 @@ async function loadSuppliers() {
    ═══════════════════════════════════════════════════════════ */
 async function loadSales() {
   try {
+    // Fetch sales + their line items + item names in one query
     const { data, error } = await db
       .from('sales')
       .select(`
-        id, total_amount, payment_type, payment_status, sale_date,
-        customers ( name )
+        id, total_amount, payment_type, payment_status, sale_date, paid_amount,
+        customers ( name ),
+        sale_items (
+          quantity, unit_price, subtotal,
+          items ( id, name, UoM )
+        )
       `)
       .order('sale_date', { ascending: false })
-      .limit(50);
+      .limit(200);
     if (error) throw error;
 
-    const statusMap = { paid: 'Completed', pending: 'Pending', partial: 'Pending' };
-    const mapped = (data || []).map(row => ({
-      id:       row.id.slice(0, 14).toUpperCase(),
-      customer: row.customers?.name || 'Walk-in',
-      items:    1,
-      total:    parseFloat(row.total_amount),
-      payment:  row.payment_type || 'Cash',
-      status:   statusMap[row.payment_status] || 'Completed',
-      date:     row.sale_date ? row.sale_date.replace('T', ' ').slice(0, 16) : '—',
-    }));
+    // payment_status → display status
+    const statusMap = { paid: 'Completed', pending: 'Pending', partial: 'Pending', partial_paid: 'Pending' };
+    // payment_type capitalisation
+    const payLabel = t => ({ bkash:'bKash', nagad:'Nagad', cash:'Cash', card:'Card' }[t] || t);
+
+    const mapped = (data || []).map(row => {
+      const lineItems = (row.sale_items || []).map(si => ({
+        name:      si.items?.name || '—',
+        uom:       si.items?.UoM  || '',
+        qty:       si.quantity,
+        unitPrice: parseFloat(si.unit_price),
+        subtotal:  parseFloat(si.subtotal),
+      }));
+
+      // Build a short item summary for the table column
+      const itemSummary = lineItems.length
+        ? lineItems.map(li => li.name.length > 30 ? li.name.slice(0, 28) + '…' : li.name).join(', ')
+        : '—';
+
+      return {
+        _dbId:       row.id,                                         // keep raw UUID for sub-queries
+        id:          row.id.slice(0, 8).toUpperCase(),
+        customer:    row.customers?.name || 'Walk-in',
+        items:       lineItems.length || 1,
+        itemSummary: itemSummary,
+        total:       parseFloat(row.total_amount),
+        payment:     payLabel(row.payment_type || 'cash'),
+        status:      statusMap[row.payment_status] || 'Completed',
+        date:        row.sale_date ? row.sale_date.replace('T', ' ').slice(0, 16) : '—',
+        lineItems:   lineItems,
+      };
+    });
 
     recentSales.length = 0;
     mapped.forEach(s => recentSales.push(s));
@@ -278,27 +305,48 @@ async function loadPurchases() {
     const { data, error } = await db
       .from('supplier_purchases')
       .select(`
-        id, total_amount, purchase_date, payment_status,
-        suppliers ( name )
+        id, total_amount, purchase_date, payment_status, paid_amount,
+        suppliers ( name ),
+        supplier_purchase_items (
+          quantity, unit_cost, subtotal,
+          items ( id, name, UoM )
+        )
       `)
       .order('purchase_date', { ascending: false })
-      .limit(50);
+      .limit(200);
     if (error) throw error;
 
-    const statusMap = { paid: 'Received', pending: 'Pending' };
+    const statusMap = { paid: 'Received', pending: 'Pending', partial_paid: 'In Transit', partial: 'In Transit' };
+
     const mapped = (data || []).map(row => {
+      const lineItems = (row.supplier_purchase_items || []).map(pi => ({
+        name:      pi.items?.name || '—',
+        uom:       pi.items?.UoM  || '',
+        qty:       pi.quantity,
+        unitPrice: parseFloat(pi.unit_cost),
+        subtotal:  parseFloat(pi.subtotal),
+      }));
+
+      const itemSummary = lineItems.length
+        ? lineItems.map(li => li.name.length > 30 ? li.name.slice(0, 28) + '…' : li.name).join(', ')
+        : '—';
+
       const d = row.purchase_date ? row.purchase_date.split('T')[0] : '—';
       const due = row.purchase_date
         ? new Date(new Date(row.purchase_date).getTime() + 30*24*60*60*1000).toISOString().split('T')[0]
         : '—';
+
       return {
-        id:       'PO-' + row.id.slice(0, 8).toUpperCase(),
-        supplier: row.suppliers?.name || '—',
-        items:    1,
-        total:    parseFloat(row.total_amount),
-        status:   statusMap[row.payment_status] || 'Pending',
-        date:     d,
-        dueDate:  due,
+        _dbId:       row.id,
+        id:          'PO-' + row.id.slice(0, 8).toUpperCase(),
+        supplier:    row.suppliers?.name || '—',
+        items:       lineItems.length || 1,
+        itemSummary: itemSummary,
+        total:       parseFloat(row.total_amount),
+        status:      statusMap[row.payment_status] || 'Pending',
+        date:        d,
+        dueDate:     due,
+        lineItems:   lineItems,
       };
     });
 
@@ -306,8 +354,232 @@ async function loadPurchases() {
     mapped.forEach(p => purchases.push(p));
     renderPurchases();
 
+    /* ── Update mini-stats on purchases page ── */
+    const totalVal  = purchases.reduce((s, p) => s + p.total, 0);
+    const pendingCt = purchases.filter(p => p.status === 'Pending' || p.status === 'In Transit').length;
+    const overdueCt = purchases.filter(p => p.status === 'Overdue').length;
+    const ms = document.querySelectorAll('#page-purchases .mini-stat-val');
+    if (ms[0]) ms[0].textContent = purchases.length;
+    if (ms[1]) ms[1].textContent = '৳' + totalVal.toLocaleString('en-IN', { minimumFractionDigits: 0 });
+    if (ms[2]) ms[2].textContent = pendingCt;
+    if (ms[3]) ms[3].textContent = overdueCt;
+
   } catch (err) {
     console.error('Load purchases error:', err);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SAVE NEW PURCHASE ORDER TO SUPABASE
+   ═══════════════════════════════════════════════════════════ */
+async function savePurchaseToDB(formData) {
+  try {
+    /* 1. Resolve supplier id from name */
+    let supplierId = null;
+    if (formData.supplierName) {
+      const { data: supRows } = await db
+        .from('suppliers')
+        .select('id')
+        .ilike('name', formData.supplierName.trim())
+        .limit(1);
+      if (supRows && supRows.length) supplierId = supRows[0].id;
+    }
+
+    /* 2. Insert the purchase header */
+    const { data: poRows, error: poErr } = await db
+      .from('supplier_purchases')
+      .insert([{
+        supplier_id:    supplierId,
+        total_amount:   parseFloat(formData.total) || 0,
+        payment_status: formData.paymentStatus || 'pending',
+        purchase_date:  new Date().toISOString(),
+      }])
+      .select();
+    if (poErr) throw poErr;
+    const newPO = poRows[0];
+
+    /* 3. Insert line items if provided */
+    if (formData.lineItems && formData.lineItems.length && newPO) {
+      const lineRows = formData.lineItems
+        .filter(li => li.name && li.qty > 0)
+        .map(li => ({
+          purchase_id: newPO.id,
+          item_id:   li.itemId || null,
+          quantity:  li.qty,
+          unit_cost: li.unitCost,
+          subtotal:  li.qty * li.unitCost,
+        }));
+      if (lineRows.length) {
+        const { error: liErr } = await db.from('supplier_purchase_items').insert(lineRows);
+        if (liErr) console.warn('Line items insert error:', liErr.message);
+      }
+    }
+
+    await loadPurchases();
+    return { success: true };
+  } catch (err) {
+    console.error('Save purchase error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SALES & PURCHASE REPORT
+   ═══════════════════════════════════════════════════════════ */
+
+async function loadSalesPurchaseReport(range) {
+  // Determine range from the dateFilter dropdown if not passed
+  if (!range) {
+    const sel = document.getElementById('dateFilter');
+    range = sel ? sel.value : 'This Year';
+  }
+  try {
+    let salesQuery = db.from('sales')
+      .select('id, total_amount, payment_status, sale_date, customers(name)')
+      .order('sale_date', { ascending: false });
+    let purchaseQuery = db.from('supplier_purchases')
+      .select('id, total_amount, payment_status, purchase_date, suppliers(name)')
+      .order('purchase_date', { ascending: false });
+
+    /* ───────────── DATE FILTERING ───────────── */
+    const now = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+    let startDate = null, endDate = null;
+
+    if (range === 'Today') {
+      startDate = endDate = ymd(now);
+    } else if (range === 'Yesterday') {
+      const y = new Date(now); y.setDate(y.getDate()-1);
+      startDate = endDate = ymd(y);
+    } else if (range === 'Last 7 Days') {
+      const s = new Date(now); s.setDate(s.getDate()-6);
+      startDate = ymd(s); endDate = ymd(now);
+    } else if (range === 'Last 30 Days') {
+      const s = new Date(now); s.setDate(s.getDate()-29);
+      startDate = ymd(s); endDate = ymd(now);
+    } else if (range === 'This Month') {
+      startDate = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
+      endDate = ymd(now);
+    } else if (range === 'Last Month') {
+      const first = new Date(now.getFullYear(), now.getMonth()-1, 1);
+      const last  = new Date(now.getFullYear(), now.getMonth(), 0);
+      startDate = ymd(first); endDate = ymd(last);
+    } else if (range === 'This Year' || range === 'this_year') {
+      startDate = `${now.getFullYear()}-01-01`;
+      endDate = ymd(now);
+    } else if (range === 'Last Year') {
+      startDate = `${now.getFullYear()-1}-01-01`;
+      endDate   = `${now.getFullYear()-1}-12-31`;
+    }
+    // 'Custom Range' — no server filter, show all (could be enhanced later)
+
+    if (startDate) {
+      salesQuery    = salesQuery.gte('sale_date', `${startDate}T00:00:00`);
+      purchaseQuery = purchaseQuery.gte('purchase_date', `${startDate}T00:00:00`);
+    }
+    if (endDate) {
+      salesQuery    = salesQuery.lte('sale_date', `${endDate}T23:59:59`);
+      purchaseQuery = purchaseQuery.lte('purchase_date', `${endDate}T23:59:59`);
+    }
+
+    const [{ data: sales }, { data: purches }] = await Promise.all([salesQuery, purchaseQuery]);
+
+    /* ───────────── CALCULATE SALES ───────────── */
+    let totalSale = 0, saleDue = 0;
+    (sales || []).forEach(s => {
+      const amount = parseFloat(s.total_amount) || 0;
+      totalSale += amount;
+      if (s.payment_status !== 'paid') saleDue += amount;
+    });
+
+    /* ───────────── CALCULATE PURCHASES ───────────── */
+    let totalPurchase = 0, purchaseDue = 0;
+    (purches || []).forEach(p => {
+      const amount = parseFloat(p.total_amount) || 0;
+      totalPurchase += amount;
+      if (p.payment_status !== 'paid') purchaseDue += amount;
+    });
+
+    /* ───────────── UPDATE SUMMARY CARDS ───────────── */
+    setText('totalPurchase', totalPurchase);
+    setText('purchaseIncTax', totalPurchase);        // same (no separate tax field)
+    setText('purchaseReturnIncTax', 0);
+    setText('purchaseDue', purchaseDue);
+    setText('totalSale', totalSale);
+    setText('saleIncTax', totalSale);
+    setText('saleReturnIncTax', 0);
+    setText('saleDue', saleDue);
+    setText('saleMinusPurchase', totalSale - totalPurchase, true);
+    setText('totalDueAmount', saleDue - purchaseDue, true);
+
+    /* ───────────── POPULATE TRANSACTIONS TABLE ───────────── */
+    const tbody = document.getElementById('psrTbody');
+    if (tbody) {
+      const statusBadgePSR = (st, type) => {
+        const map = {
+          paid:         ['b-green',  'Paid'],
+          pending:      ['b-mango',  'Pending'],
+          partial_paid: ['b-mango',  'Partial'],
+          partial:      ['b-mango',  'Partial'],
+        };
+        const [cls, label] = map[st] || ['b-grey', st || '—'];
+        return `<span class="badge ${cls}">${label}</span>`;
+      };
+
+      const saleRows = (sales || []).map(s => ({
+        date:   s.sale_date ? s.sale_date.replace('T',' ').slice(0,16) : '—',
+        ref:    `<span class="mono">${s.id.slice(0,8).toUpperCase()}</span>`,
+        type:   `<span class="badge b-green" style="font-size:10px">Sale</span>`,
+        party:  s.customers?.name || 'Walk-in',
+        amount: parseFloat(s.total_amount) || 0,
+        status: s.payment_status,
+      }));
+
+      const purRows = (purches || []).map(p => ({
+        date:   p.purchase_date ? p.purchase_date.split('T')[0] : '—',
+        ref:    `<span class="mono">PO-${p.id.slice(0,8).toUpperCase()}</span>`,
+        type:   `<span class="badge b-blue" style="font-size:10px">Purchase</span>`,
+        party:  p.suppliers?.name || '—',
+        amount: parseFloat(p.total_amount) || 0,
+        status: p.payment_status,
+      }));
+
+      const rows = [...saleRows, ...purRows].sort((a,b) => b.date.localeCompare(a.date));
+
+      if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-soft);padding:24px">No transactions found for this period.</td></tr>';
+      } else {
+        tbody.innerHTML = rows.map((r,i) => `
+          <tr style="animation:fadeUp .3s ease ${i*30}ms both">
+            <td style="color:var(--text-soft);font-size:12px">${r.date}</td>
+            <td>${r.ref}</td>
+            <td>${r.type}</td>
+            <td>${r.party}</td>
+            <td><span class="mono" style="font-weight:700">৳${r.amount.toLocaleString('en-IN',{minimumFractionDigits:2})}</span></td>
+            <td>${statusBadgePSR(r.status)}</td>
+          </tr>`).join('');
+      }
+    }
+
+  } catch (err) {
+    console.error('Report load error:', err);
+    const tbody = document.getElementById('psrTbody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red);padding:24px">Error loading data: ${err.message}</td></tr>`;
+  }
+}
+
+/* Helper to update text + color */
+function setText(id, value, colorize = false) {
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  el.textContent = "৳ " + value.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+
+  if (colorize) {
+    el.classList.remove('positive', 'negative');
+    el.classList.add(value >= 0 ? 'positive' : 'negative');
   }
 }
 
@@ -319,13 +591,20 @@ function setupRealtimeSubscriptions() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'items' },
       () => loadProducts())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' },
-      () => { loadSales(); loadDashboardStats(); })
+      () => { 
+        loadSales(); 
+        loadDashboardStats(); 
+        loadSalesPurchaseReport("this_year");
+      })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' },
       () => loadCustomers())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'suppliers' },
       () => loadSuppliers())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'supplier_purchases' },
-      () => loadPurchases())
+      () => { 
+        loadPurchases();
+        loadSalesPurchaseReport("this_year");
+      })
     .subscribe();
 }
 
@@ -362,15 +641,36 @@ async function initSupabase() {
   const ok = await checkSupabaseConnection();
   if (!ok) return;
 
-  // Load all data in parallel
-  await Promise.all([
-    loadProducts(),
-    loadCustomers(),
-    loadSuppliers(),
-    loadSales(),
-    loadPurchases(),
-    loadDashboardStats(),
-  ]);
+  // Load all data - run individually so one failure doesn't block others
+  const loaders = [
+    ['products',   loadProducts],
+    ['customers',  loadCustomers],
+    ['suppliers',  loadSuppliers],
+    ['sales',      loadSales],
+    ['purchases',  loadPurchases],
+    ['dashboard',  loadDashboardStats],
+  ];
+
+  for (const [name, fn] of loaders) {
+    try {
+      await fn();
+    } catch (err) {
+      console.error(`Failed to load ${name}:`, err);
+      showBanner('error', `⚠️ Failed to load ${name}: ${err.message}`);
+    }
+  }
+
+  try {
+    await loadSalesPurchaseReport('This Year');
+  } catch (err) {
+    console.error('Failed to load report:', err);
+  }
 
   setupRealtimeSubscriptions();
+
+  /* ── Wire up dateFilter dropdown ── */
+  const dateFilterEl = document.getElementById('dateFilter');
+  if (dateFilterEl) {
+    dateFilterEl.addEventListener('change', () => loadSalesPurchaseReport(dateFilterEl.value));
+  }
 }

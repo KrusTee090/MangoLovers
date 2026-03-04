@@ -83,6 +83,10 @@
         <span class="icon nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
         Reports
       </div>
+      <div class="nav-item" data-page="Purchase and Sell Report">
+        <span class="icon nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
+        Purchase and Sell Report
+      </div>
       <div class="nav-item" data-page="analytics">
         <span class="icon nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
         Analytics
@@ -322,27 +326,6 @@
       </table></div></div>
     </div> -->
 
-    <!-- ══ ADJUSTMENTS ══ -->
-    <div class="page-section" id="page-adjustments">
-      <div class="section-hdr">
-        <div><h2>Stock Adjustments</h2><p>Manual stock corrections</p></div>
-        <button class="btn btn-primary"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Adjustment</button>
-      </div>
-      <div class="card"><div class="tbl-wrap"><table>
-        <thead><tr><th>Date</th><th>Product</th><th>Type</th><th>Qty Change</th><th>Reason</th><th>By</th></tr></thead>
-        <tbody>
-          <tr><td class="mono" style="color:var(--text-soft);font-size:12px">2026-02-23</td>
-              <td><div class="prod-cell"><div class="prod-thumb"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg></div><div><div class="prod-name">Sony WH-1000XM5</div></div></div></td>
-              <td><span class="badge b-green"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Addition</span></td>
-              <td class="mono" style="color:var(--green);font-weight:700">+5</td><td>Supplier return</td><td>Admin</td></tr>
-          <tr><td class="mono" style="color:var(--text-soft);font-size:12px">2026-02-22</td>
-              <td><div class="prod-cell"><div class="prod-thumb"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div><div><div class="prod-name">Nike Air Max 270</div></div></div></td>
-              <td><span class="badge b-red"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>Deduction</span></td>
-              <td class="mono" style="color:var(--red);font-weight:700">-2</td><td>Damaged goods</td><td>Admin</td></tr>
-        </tbody>
-      </table></div></div>
-    </div>
-
     <!-- ══ SALES ══ -->
     <div class="page-section" id="page-sales">
       <div class="section-hdr">
@@ -373,7 +356,7 @@
     <div class="page-section" id="page-purchases">
       <div class="section-hdr">
         <div><h2>Purchases</h2><p>Purchase orders &amp; supplier transactions</p></div>
-        <button class="btn btn-primary"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New PO</button>
+        <button class="btn btn-primary" onclick="openNewPO()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New PO</button>
       </div>
       <div class="stat-grid g4" style="margin-bottom:14px">
         <div class="mini-stat fade-up d1"><div class="mini-stat-icon" style="background:var(--blue-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div><div class="mini-stat-val" style="color:var(--blue)">5</div><div class="mini-stat-lbl">Total POs</div></div></div>
@@ -381,21 +364,52 @@
         <div class="mini-stat fade-up d3"><div class="mini-stat-icon" style="background:#f3f0fd"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="mini-stat-val" style="color:var(--purple)">2</div><div class="mini-stat-lbl">Pending</div></div></div>
         <div class="mini-stat fade-up d4"><div class="mini-stat-icon" style="background:var(--red-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg></div><div><div class="mini-stat-val" style="color:var(--red)">1</div><div class="mini-stat-lbl">Overdue</div></div></div>
       </div>
+      <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center">
+        <div class="fsearch" style="flex:1"><span class="icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><input type="text" placeholder="Search by supplier or PO number…" id="purchasesSearch"></div>
+        <div style="display:flex;gap:6px">
+          <div class="pill active" onclick="filterPurchases('All',this)">All</div>
+          <div class="pill" onclick="filterPurchases('Received',this)">Received</div>
+          <div class="pill" onclick="filterPurchases('Pending',this)">Pending</div>
+          <div class="pill" onclick="filterPurchases('Overdue',this)">Overdue</div>
+        </div>
+      </div>
       <div class="card"><div class="tbl-wrap"><table>
         <thead><tr><th>PO Number</th><th>Supplier</th><th>Items</th><th>Total</th><th>Status</th><th>Order Date</th><th>Due Date</th><th></th></tr></thead>
         <tbody id="purchasesTbody"></tbody>
       </table></div></div>
     </div>
 
-    <!-- ══ RETURNS ══ -->
-    <div class="page-section" id="page-returns">
-      <div class="section-hdr"><div><h2>Returns</h2><p>Manage product returns</p></div><button class="btn btn-primary"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Return</button></div>
+        <!-- ══ SALES RETURNS ══ -->
+    <div class="page-section" id="page-sales-returns">
+      <div class="section-hdr">
+        <div><h2>Sales Returns</h2><p>Customer returns &amp; refunds</p></div>
+        <button class="btn btn-primary" onclick="openNewSalesReturn()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Return</button>
+      </div>
+      <div class="stat-grid g3" style="margin-bottom:14px">
+        <div class="mini-stat fade-up d1"><div class="mini-stat-icon" style="background:var(--red-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg></div><div><div class="mini-stat-val" id="sr-total-count" style="color:var(--red)">2</div><div class="mini-stat-lbl">Total Returns</div></div></div>
+        <div class="mini-stat fade-up d2"><div class="mini-stat-icon" style="background:var(--mango-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--mango)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="mini-stat-val" id="sr-pending-count" style="color:var(--mango-dk)">1</div><div class="mini-stat-lbl">Pending</div></div></div>
+        <div class="mini-stat fade-up d3"><div class="mini-stat-icon" style="background:var(--green-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><div><div class="mini-stat-val" id="sr-processed-count" style="color:var(--green)">1</div><div class="mini-stat-lbl">Processed</div></div></div>
+      </div>
       <div class="card"><div class="tbl-wrap"><table>
-        <thead><tr><th>Return ID</th><th>Original Invoice</th><th>Customer</th><th>Product</th><th>Qty</th><th>Reason</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr><td class="mono" style="color:var(--mint);font-size:12px">RET-001</td><td class="mono" style="color:var(--text-soft);font-size:12px">INV-2024-1838</td><td>Tanvir Hossain</td><td>Premium Cotton T-Shirt</td><td class="mono">4</td><td>Wrong size</td><td><span class="badge b-green"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Processed</span></td></tr>
-          <tr><td class="mono" style="color:var(--mint);font-size:12px">RET-002</td><td class="mono" style="color:var(--text-soft);font-size:12px">INV-2024-1840</td><td>Karim Miah</td><td>Organic Green Tea</td><td class="mono">2</td><td>Damaged packaging</td><td><span class="badge b-mango"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Pending</span></td></tr>
-        </tbody>
+        <thead><tr><th>Return ID</th><th>Original Invoice</th><th>Customer</th><th>Product</th><th>Qty</th><th>Refund Amt</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+        <tbody id="salesReturnsTbody"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- ══ PURCHASE RETURNS ══ -->
+    <div class="page-section" id="page-purchase-returns">
+      <div class="section-hdr">
+        <div><h2>Purchase Returns</h2><p>Returns to suppliers</p></div>
+        <button class="btn btn-primary" onclick="openNewPurchaseReturn()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Return</button>
+      </div>
+      <div class="stat-grid g3" style="margin-bottom:14px">
+        <div class="mini-stat fade-up d1"><div class="mini-stat-icon" style="background:var(--red-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3.51"/></svg></div><div><div class="mini-stat-val" id="pr-total-count" style="color:var(--red)">1</div><div class="mini-stat-lbl">Total Returns</div></div></div>
+        <div class="mini-stat fade-up d2"><div class="mini-stat-icon" style="background:var(--mango-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--mango)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="mini-stat-val" id="pr-pending-count" style="color:var(--mango-dk)">0</div><div class="mini-stat-lbl">Pending</div></div></div>
+        <div class="mini-stat fade-up d3"><div class="mini-stat-icon" style="background:var(--green-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><div><div class="mini-stat-val" id="pr-approved-count" style="color:var(--green)">1</div><div class="mini-stat-lbl">Approved</div></div></div>
+      </div>
+      <div class="card"><div class="tbl-wrap"><table>
+        <thead><tr><th>Return ID</th><th>PO Number</th><th>Supplier</th><th>Product</th><th>Qty</th><th>Credit Amt</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+        <tbody id="purchaseReturnsTbody"></tbody>
       </table></div></div>
     </div>
 
@@ -432,6 +446,121 @@
         <div class="report-card" style="grid-column:span 2"><h3>Top 5 Products by Value</h3><div id="topProdsReport"></div></div>
       </div>
     </div>
+    <div class="page-section report-container" id="page-Purchase and Sell Report">
+
+      <div class="report-header">
+          <div>
+              <h2>Purchase & Sale Report</h2>
+              <p>Purchase & sale details </p>
+          </div>
+
+          <div class="report-filter">
+              <select id="dateFilter">
+                  <option>Today</option>
+                  <option>Yesterday</option>
+                  <option>Last 7 Days</option>
+                  <option>Last 30 Days</option>
+                  <option>This Month</option>
+                  <option>Last Month</option>
+                  <option>This Year</option>
+                  <option>Last Year</option>
+                  <option>Custom Range</option>
+              </select>
+          </div>
+      </div>
+
+
+      <div class="report-cards">
+
+          <!-- PURCHASE CARD -->
+          <div class="report-card">
+              <h3>Purchases</h3>
+
+              <div class="report-row">
+                  <span>Total Purchase:</span>
+                  <span id="totalPurchase">৳ 0.00</span>
+              </div>
+
+              <div class="report-row">
+                  <span>Purchase Including Tax:</span>
+                  <span id="purchaseIncTax">৳ 0.00</span>
+              </div>
+
+              <div class="report-row">
+                  <span>Total Purchase Return Including Tax:</span>
+                  <span id="purchaseReturnIncTax">৳ 0.00</span>
+              </div>
+
+              <div class="report-row highlight">
+                  <span>Purchase Due:</span>
+                  <span id="purchaseDue">৳ 0.00</span>
+              </div>
+          </div>
+
+
+          <!-- SALES CARD -->
+          <div class="report-card">
+              <h3>Sales</h3>
+
+              <div class="report-row">
+                  <span>Total Sale:</span>
+                  <span id="totalSale">৳ 0.00</span>
+              </div>
+
+              <div class="report-row">
+                  <span>Sale Including Tax:</span>
+                  <span id="saleIncTax">৳ 0.00</span>
+              </div>
+
+              <div class="report-row">
+                  <span>Total Sell Return Including Tax:</span>
+                  <span id="saleReturnIncTax">৳ 0.00</span>
+              </div>
+
+              <div class="report-row highlight">
+                  <span>Sale Due:</span>
+                  <span id="saleDue">৳ 0.00</span>
+              </div>
+          </div>
+
+      </div>
+
+
+      <!-- OVERALL SUMMARY -->
+      <div class="overall-summary">
+          <h3>Overall ((Sale - Sell Return) - (Purchase - Purchase Return))</h3>
+
+          <div class="overall-row">
+              <span>Sale - Purchase:</span>
+              <span id="saleMinusPurchase" class="negative">৳ 0.00</span>
+          </div>
+
+          <div class="overall-row">
+              <span>Due Amount:</span>
+              <span id="totalDueAmount" class="negative">৳ 0.00</span>
+          </div>
+      </div>
+
+      <!-- TRANSACTIONS TABLE -->
+      <div class="card" style="margin-top:18px">
+        <div style="padding:14px 18px 10px;border-bottom:1px solid var(--border)"><strong style="font-size:13px">Transactions</strong></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr>
+            <th>Date</th>
+            <th>Reference</th>
+            <th>Type</th>
+            <th>Party</th>
+            <th>Amount</th>
+            <th>Status</th>
+          </tr></thead>
+          <tbody id="psrTbody"><tr><td colspan="6" style="text-align:center;color:var(--text-soft);padding:24px">Loading…</td></tr></tbody>
+        </table></div>
+      </div>
+
+      <button onclick="printReport()" class="print-btn">Print</button>
+
+  </div>
+
 
     <!-- ══ ANALYTICS ══ -->
     <div class="page-section" id="page-analytics">
@@ -519,9 +648,11 @@
 <script src="ml-features.js"></script>
 <script>
   // Boot Supabase after everything is rendered
-  document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(initSupabase, 200);
-  });
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSupabase);
+  } else {
+    initSupabase();
+  }
 </script>
 </body>
 </html>

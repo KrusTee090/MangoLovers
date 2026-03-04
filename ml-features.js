@@ -7,6 +7,99 @@
          Export CSV, Toast notifications
    ═══════════════════════════════════════════════════════════════════ */
 
+
+/* ══════════════════════════════════
+   PURCHASE ORDER ACTION DISPATCHER
+   Called directly from onclick in renderPurchases
+══════════════════════════════════ */
+function _poAction(action, idx) {
+  const po = purchases[idx];
+  if (!po) return;
+  if (action === 'view')    viewPurchaseOrder(po);
+  if (action === 'print')   printPurchaseOrder(po);
+  if (action === 'confirm') confirmPO(po);
+}
+
+function printPurchaseOrder(po) {
+  const lines = (po.lineItems && po.lineItems.length)
+    ? po.lineItems
+    : [{name: 'Ordered items (' + po.items + ')', qty: po.items, unitPrice: po.total / po.items, subtotal: po.total}];
+
+  const rows = lines.map((li, i) =>
+    '<tr><td>' + (i+1) + '</td><td>' + li.name + (li.uom ? ' (' + li.uom + ')' : '') +
+    '</td><td>' + li.qty + '</td><td>৳' + Number(li.unitPrice).toFixed(2) +
+    '</td><td>৳' + Number(li.subtotal).toFixed(2) + '</td></tr>'
+  ).join('');
+
+  const statusBgMap = { Received: '#eaf7f1', Pending: '#fff8ec', Overdue: '#fef2f2' };
+  const statusClrMap = { Received: '#3caf82', Pending: '#b27900', Overdue: '#e55353' };
+  const bg  = statusBgMap[po.status]  || '#f7faf8';
+  const clr = statusClrMap[po.status] || '#1a2e22';
+
+  const win = window.open('', '_blank', 'width=820,height=700');
+  win.document.write(`<!DOCTYPE html><html><head>
+  <title>Purchase Order ${po.id}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'DM Sans',Arial,sans-serif;color:#1a2e22;background:#fff;padding:40px}
+    .brand{font-size:22px;font-weight:800;letter-spacing:-.02em}
+    .brand span{color:#f5a623}
+    .inv-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:18px;border-bottom:2px solid #e8f0eb}
+    .inv-meta{text-align:right}
+    .inv-meta .inv-num{font-size:18px;font-weight:700;color:#4a85e8;font-family:monospace}
+    .inv-meta p{font-size:12px;color:#6b8a74;margin-top:4px}
+    .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:${bg};color:${clr}}
+    .parties{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px}
+    .party-box{background:#f7faf8;border-radius:10px;padding:14px}
+    .party-box h4{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#a8c5b8;margin-bottom:6px}
+    .party-box p{font-size:13px;font-weight:600}
+    .party-box span{font-size:12px;color:#6b8a74}
+    table{width:100%;border-collapse:collapse;margin-bottom:20px}
+    th{background:#f7faf8;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#6b8a74;padding:9px 12px;text-align:left;border-bottom:1px solid #e8f0eb}
+    td{padding:10px 12px;font-size:12.5px;border-bottom:1px solid #f0f6f2}
+    .totals{margin-left:auto;width:260px}
+    .totals-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px}
+    .totals-row.grand{border-top:2px solid #1a2e22;margin-top:6px;padding-top:10px;font-size:15px;font-weight:800}
+    .footer{margin-top:28px;text-align:center;font-size:11px;color:#a8c5b8;border-top:1px solid #e8f0eb;padding-top:14px}
+  </style></head><body>
+  <div class="inv-header">
+    <div>
+      <div class="brand">Mango<span>Lovers</span></div>
+      <p style="font-size:12px;color:#6b8a74;margin-top:4px">Purchase Order</p>
+    </div>
+    <div class="inv-meta">
+      <div class="inv-num">${po.id}</div>
+      <p>Order Date: ${po.date}</p>
+      <p style="margin-top:4px">Due: ${po.dueDate}</p>
+      <p style="margin-top:6px"><span class="badge">${po.status}</span></p>
+    </div>
+  </div>
+  <div class="parties">
+    <div class="party-box">
+      <h4>From</h4>
+      <p>Mango Lovers Ltd.</p>
+      <span>Dhaka, Bangladesh</span>
+    </div>
+    <div class="party-box">
+      <h4>Supplier</h4>
+      <p>${po.supplier}</p>
+    </div>
+  </div>
+  <table>
+    <thead><tr><th>#</th><th>Product</th><th>Qty</th><th>Unit Cost</th><th>Subtotal</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="totals">
+    <div class="totals-row"><span>Subtotal</span><span>৳${po.total.toLocaleString('en-IN',{minimumFractionDigits:2})}</span></div>
+    <div class="totals-row grand"><span>Total</span><span>৳${po.total.toLocaleString('en-IN',{minimumFractionDigits:2})}</span></div>
+  </div>
+  <div class="footer">MangoLovers Inventory System · Generated ${new Date().toLocaleString()}</div>
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 400);
+}
+
 /* ══════════════════════════════════
    TOAST SYSTEM
 ══════════════════════════════════ */
@@ -190,15 +283,12 @@ function printInvoiceHTML(sale) {
       </div>
     </div>
     <table>
-      <thead><tr><th>#</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead>
+      <thead><tr><th>#</th><th>Product</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead>
       <tbody>
-        <tr>
-          <td>1</td>
-          <td>Sale Items (${sale.items} item${sale.items!==1?'s':''})</td>
-          <td>${sale.items}</td>
-          <td>৳${(sale.total / sale.items).toFixed(2)}</td>
-          <td>৳${sale.total.toFixed(2)}</td>
-        </tr>
+        ${(sale.lineItems && sale.lineItems.length
+          ? sale.lineItems
+          : [{name:'Sale Items ('+sale.items+' items)',qty:sale.items,unitPrice:sale.total/sale.items,subtotal:sale.total}]
+        ).map((li,idx)=>'<tr><td>'+(idx+1)+'</td><td>'+li.name+(li.uom?' ('+li.uom+')':'')+'</td><td>'+li.qty+'</td><td>৳'+Number(li.unitPrice).toFixed(2)+'</td><td>৳'+Number(li.subtotal).toFixed(2)+'</td></tr>').join('')}
       </tbody>
     </table>
     <div class="totals">
@@ -226,11 +316,13 @@ function printSale(sale) {
 function viewInvoice(sale) {
   const statusColor = { Completed:'var(--green)', Pending:'var(--mango-dk)', Refunded:'var(--red)' };
   const sc = statusColor[sale.status] || 'var(--text-soft)';
+  const payColor = {'cash':'var(--green)','bkash':'var(--purple)','nagad':'var(--mango-dk)','card':'var(--blue)','Cash':'var(--green)','Card':'var(--blue)','Mobile Banking':'var(--purple)'}[sale.payment] || 'var(--text-soft)';
+
   openPanel(`
     <div class="feat-hdr">
       <div>
-        <h3>Invoice ${sale.id}</h3>
-        <p>${sale.date} · ${sale.customer}</p>
+        <h3>Invoice</h3>
+        <p style="font-family:monospace;font-size:11px;color:var(--mint)">${sale.id}</p>
       </div>
       <button class="feat-close" onclick="closePanel()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -239,34 +331,40 @@ function viewInvoice(sale) {
     <div class="feat-body">
       <div class="feat-info-grid">
         <div class="feat-info-box">
-          <div class="feat-info-lbl">Invoice #</div>
-          <div class="feat-info-val" style="font-family:monospace;font-size:12px;color:var(--mint)">${sale.id}</div>
-        </div>
-        <div class="feat-info-box">
-          <div class="feat-info-lbl">Status</div>
-          <div class="feat-info-val" style="color:${sc}">${sale.status}</div>
-        </div>
-        <div class="feat-info-box">
           <div class="feat-info-lbl">Customer</div>
           <div class="feat-info-val">${sale.customer}</div>
-        </div>
-        <div class="feat-info-box">
-          <div class="feat-info-lbl">Payment</div>
-          <div class="feat-info-val">${sale.payment}</div>
-        </div>
-        <div class="feat-info-box">
-          <div class="feat-info-lbl">Items</div>
-          <div class="feat-info-val">${sale.items}</div>
         </div>
         <div class="feat-info-box">
           <div class="feat-info-lbl">Date</div>
           <div class="feat-info-val" style="font-size:12px">${sale.date}</div>
         </div>
+        <div class="feat-info-box">
+          <div class="feat-info-lbl">Payment</div>
+          <div class="feat-info-val" style="color:${payColor};text-transform:capitalize">${sale.payment}</div>
+        </div>
+        <div class="feat-info-box">
+          <div class="feat-info-lbl">Status</div>
+          <div class="feat-info-val" style="color:${sc}">${sale.status}</div>
+        </div>
       </div>
       <div class="feat-divider"></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0">
-        <span style="font-size:13px;color:var(--text-soft)">Total Amount</span>
-        <span style="font-size:22px;font-weight:800;color:var(--mint)">৳${sale.total.toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
+      <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin-bottom:8px">Items Purchased</div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:0">
+        <thead>
+          <tr style="background:var(--bg)">
+            <th style="text-align:left;padding:7px 10px;font-size:10.5px;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--border)">Product</th>
+            <th style="text-align:center;padding:7px 8px;font-size:10.5px;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--border)">Qty</th>
+            <th style="text-align:right;padding:7px 8px;font-size:10.5px;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--border)">Unit</th>
+            <th style="text-align:right;padding:7px 10px;font-size:10.5px;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--border)">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody id="inv-line-items">
+          <tr><td colspan="4" style="padding:14px;text-align:center;color:var(--text-faint);font-size:12px">Loading items…</td></tr>
+        </tbody>
+      </table>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 10px;border-top:2px solid var(--border);margin-top:0">
+        <span style="font-size:12px;font-weight:700;color:var(--text-soft)">TOTAL</span>
+        <span style="font-size:22px;font-weight:800;color:var(--mint);font-family:monospace">৳${sale.total.toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
       </div>
     </div>
     <div class="feat-footer">
@@ -276,8 +374,58 @@ function viewInvoice(sale) {
         Print Invoice
       </button>
     </div>
-  `, '500px');
+  `, '560px');
+
   window._viewSale = sale;
+
+  // Populate line items — fetch from DB if not loaded yet
+  requestAnimationFrame(async () => {
+    const tbody = document.getElementById('inv-line-items');
+    if (!tbody) return;
+
+    // If we already have lineItems loaded, render directly
+    if (sale.lineItems && sale.lineItems.length) {
+      _renderLineItemsTbody(tbody, sale.lineItems);
+      return;
+    }
+
+    // Otherwise fetch from sale_items table using the raw DB id
+    if (typeof db !== 'undefined' && sale._dbId) {
+      try {
+        const { data, error } = await db
+          .from('sale_items')
+          .select('quantity, unit_price, subtotal, items(name, UoM)')
+          .eq('sale_id', sale._dbId);
+        if (!error && data && data.length) {
+          sale.lineItems = data.map(r => ({
+            name:      r.items?.name || '—',
+            uom:       r.items?.UoM  || '',
+            qty:       r.quantity,
+            unitPrice: parseFloat(r.unit_price),
+            subtotal:  parseFloat(r.subtotal),
+          }));
+          _renderLineItemsTbody(tbody, sale.lineItems);
+          return;
+        }
+      } catch(e) { console.warn('Could not load line items:', e); }
+    }
+
+    // Fallback — just show total
+    _renderLineItemsTbody(tbody, [{
+      name: 'Sale items (' + sale.items + ' item' + (sale.items !== 1 ? 's' : '') + ')',
+      qty: sale.items, unitPrice: sale.total / sale.items, subtotal: sale.total
+    }]);
+  });
+}
+
+function _renderLineItemsTbody(tbody, lines) {
+  tbody.innerHTML = lines.map(li => `
+    <tr>
+      <td style="padding:8px 10px;font-size:12px;border-bottom:1px solid var(--border)">${li.name}${li.uom ? " (" + li.uom + ")" : ""}</td>
+      <td style="padding:8px 8px;font-size:12px;text-align:center;border-bottom:1px solid var(--border);font-family:monospace">${li.qty}</td>
+      <td style="padding:8px 8px;font-size:12px;text-align:right;border-bottom:1px solid var(--border);font-family:monospace">৳${li.unitPrice.toFixed(2)}</td>
+      <td style="padding:8px 10px;font-size:12px;text-align:right;font-weight:700;border-bottom:1px solid var(--border);font-family:monospace">৳${li.subtotal.toFixed(2)}</td>
+    </tr>`).join('');
 }
 
 /* ══════════════════════════════════
@@ -939,18 +1087,25 @@ async function _confirmPOStatus(poid) {
   const idx = purchases.findIndex(x => x.id === poid);
   if (idx > -1) purchases[idx].status = newStatus;
 
-  if (typeof db !== 'undefined' && !poid.startsWith('PO-')) {
+  /* Use _dbId (raw UUID) for the Supabase update */
+  const po = purchases[idx];
+  const dbId = (po && po._dbId) ? po._dbId : null;
+
+  if (typeof db !== 'undefined' && dbId) {
     try {
-      const dbStatus = newStatus === 'Received' ? 'paid' : 'pending';
-      const { error } = await db.from('supplier_purchases').update({ payment_status: dbStatus }).eq('id', poid);
+      const dbStatus = newStatus === 'Received' ? 'paid' : newStatus === 'Pending' ? 'pending' : 'pending';
+      const { error } = await db.from('supplier_purchases').update({ payment_status: dbStatus }).eq('id', dbId);
       if (error) throw error;
+      await loadPurchases();
     } catch (err) {
       toast('Saved locally · DB error: ' + err.message, 'warning');
+      renderPurchases();
     }
+  } else {
+    renderPurchases();
   }
 
   closePanel();
-  renderPurchases();
   toast(`Order ${poid} → ${newStatus}${note ? ' · ' + note : ''}`);
 }
 
@@ -974,109 +1129,470 @@ function exportCSV(data, filename, columns) {
   toast(`Exported ${filename}`);
 }
 
+
+/* ══════════════════════════════════
+   SALES RETURN VIEW / PRINT
+══════════════════════════════════ */
+function viewSalesReturn(r) {
+  const statusColor = { Processed:'var(--green)', Pending:'var(--mango-dk)' };
+  openPanel(`
+    <div class="feat-hdr">
+      <div><h3>Sales Return ${r.id}</h3><p>${r.date} · ${r.customer}</p></div>
+      <button class="feat-close" onclick="closePanel()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="feat-body">
+      <div class="feat-info-grid">
+        <div class="feat-info-box"><div class="feat-info-lbl">Return ID</div><div class="feat-info-val" style="font-family:monospace;color:var(--mint)">${r.id}</div></div>
+        <div class="feat-info-box"><div class="feat-info-lbl">Original Invoice</div><div class="feat-info-val" style="font-family:monospace;font-size:12px">${r.invoiceId}</div></div>
+        <div class="feat-info-box"><div class="feat-info-lbl">Customer</div><div class="feat-info-val">${r.customer}</div></div>
+        <div class="feat-info-box"><div class="feat-info-lbl">Status</div><div class="feat-info-val" style="color:${statusColor[r.status]||'var(--text)'}">${r.status}</div></div>
+      </div>
+      <div class="feat-divider"></div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin-bottom:8px">Returned Item</div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+        <thead><tr style="background:var(--bg)">
+          <th style="text-align:left;padding:7px 10px;font-size:10.5px;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--border)">Product</th>
+          <th style="text-align:center;padding:7px 8px;font-size:10.5px;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--border)">Qty</th>
+          <th style="text-align:right;padding:7px 10px;font-size:10.5px;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--border)">Refund</th>
+        </tr></thead>
+        <tbody><tr>
+          <td style="padding:9px 10px;font-size:12.5px;border-bottom:1px solid var(--border)">${r.product}</td>
+          <td style="padding:9px 8px;text-align:center;font-family:monospace;border-bottom:1px solid var(--border)">${r.qty}</td>
+          <td style="padding:9px 10px;text-align:right;font-weight:700;color:var(--red);font-family:monospace;border-bottom:1px solid var(--border)">৳${r.refundAmt.toFixed(2)}</td>
+        </tr></tbody>
+      </table>
+      <div style="font-size:12.5px;color:var(--text-soft);padding:8px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+        <strong>Reason:</strong> ${r.reason}
+      </div>
+    </div>
+    <div class="feat-footer">
+      <button class="btn btn-outline" onclick="closePanel()">Close</button>
+      <button class="btn btn-primary" onclick="printSalesReturn(window._viewSR);closePanel()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Print
+      </button>
+    </div>
+  `, '500px');
+  window._viewSR = r;
+}
+
+function printSalesReturn(r) {
+  const win = window.open('', '_blank', 'width=700,height=600');
+  win.document.write(`<!DOCTYPE html><html><head><title>Sales Return ${r.id}</title>
+  <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:40px;color:#1a2e22}
+  .brand{font-size:22px;font-weight:800}.brand span{color:#f5a623}
+  h2{font-size:18px;color:#e55353;margin:20px 0 4px}
+  .meta{color:#6b8a74;font-size:12px;margin-bottom:24px}
+  table{width:100%;border-collapse:collapse;margin:16px 0}
+  th{background:#f7faf8;padding:9px 12px;font-size:11px;text-transform:uppercase;text-align:left;border-bottom:1px solid #e8f0eb}
+  td{padding:10px 12px;font-size:13px;border-bottom:1px solid #f0f6f2}
+  .total{text-align:right;font-size:15px;font-weight:700;color:#e55353;margin-top:12px}
+  .reason{background:#fef9f9;border:1px solid #fde;border-radius:8px;padding:12px 16px;margin-top:16px;font-size:13px}
+  .footer{margin-top:32px;text-align:center;font-size:11px;color:#a8c5b8;border-top:1px solid #e8f0eb;padding-top:14px}
+  </style></head><body>
+  <div class="brand">Mango<span>Lovers</span></div>
+  <h2>Sales Return ${r.id}</h2>
+  <div class="meta">Date: ${r.date} &nbsp;|&nbsp; Original Invoice: ${r.invoiceId} &nbsp;|&nbsp; Customer: ${r.customer} &nbsp;|&nbsp; Status: ${r.status}</div>
+  <table><thead><tr><th>Product</th><th>Qty Returned</th><th>Refund Amount</th></tr></thead>
+  <tbody><tr><td>${r.product}</td><td>${r.qty}</td><td>৳${r.refundAmt.toFixed(2)}</td></tr></tbody></table>
+  <div class="total">Total Refund: ৳${r.refundAmt.toFixed(2)}</div>
+  <div class="reason"><strong>Reason:</strong> ${r.reason}</div>
+  <div class="footer">MangoLovers Inventory System · Generated ${new Date().toLocaleString()}</div>
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 400);
+}
+
+/* ══════════════════════════════════
+   PURCHASE RETURN VIEW / PRINT
+══════════════════════════════════ */
+function viewPurchaseReturn(r) {
+  const statusColor = { Approved:'var(--green)', Pending:'var(--mango-dk)' };
+  openPanel(`
+    <div class="feat-hdr">
+      <div><h3>Purchase Return ${r.id}</h3><p>${r.date} · ${r.supplier}</p></div>
+      <button class="feat-close" onclick="closePanel()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="feat-body">
+      <div class="feat-info-grid">
+        <div class="feat-info-box"><div class="feat-info-lbl">Return ID</div><div class="feat-info-val" style="font-family:monospace;color:var(--mint)">${r.id}</div></div>
+        <div class="feat-info-box"><div class="feat-info-lbl">PO Number</div><div class="feat-info-val" style="font-family:monospace;font-size:12px">${r.poId}</div></div>
+        <div class="feat-info-box"><div class="feat-info-lbl">Supplier</div><div class="feat-info-val">${r.supplier}</div></div>
+        <div class="feat-info-box"><div class="feat-info-lbl">Status</div><div class="feat-info-val" style="color:${statusColor[r.status]||'var(--text)'}">${r.status}</div></div>
+      </div>
+      <div class="feat-divider"></div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin-bottom:8px">Returned Item</div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+        <thead><tr style="background:var(--bg)">
+          <th style="text-align:left;padding:7px 10px;font-size:10.5px;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--border)">Product</th>
+          <th style="text-align:center;padding:7px 8px;font-size:10.5px;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--border)">Qty</th>
+          <th style="text-align:right;padding:7px 10px;font-size:10.5px;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--border)">Credit</th>
+        </tr></thead>
+        <tbody><tr>
+          <td style="padding:9px 10px;font-size:12.5px;border-bottom:1px solid var(--border)">${r.product}</td>
+          <td style="padding:9px 8px;text-align:center;font-family:monospace;border-bottom:1px solid var(--border)">${r.qty}</td>
+          <td style="padding:9px 10px;text-align:right;font-weight:700;color:var(--red);font-family:monospace;border-bottom:1px solid var(--border)">৳${r.creditAmt.toFixed(2)}</td>
+        </tr></tbody>
+      </table>
+      <div style="font-size:12.5px;color:var(--text-soft);padding:8px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+        <strong>Reason:</strong> ${r.reason}
+      </div>
+    </div>
+    <div class="feat-footer">
+      <button class="btn btn-outline" onclick="closePanel()">Close</button>
+      <button class="btn btn-primary" onclick="printPurchaseReturn(window._viewPR);closePanel()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Print
+      </button>
+    </div>
+  `, '500px');
+  window._viewPR = r;
+}
+
+function printPurchaseReturn(r) {
+  const win = window.open('', '_blank', 'width=700,height=600');
+  win.document.write(`<!DOCTYPE html><html><head><title>Purchase Return ${r.id}</title>
+  <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:40px;color:#1a2e22}
+  .brand{font-size:22px;font-weight:800}.brand span{color:#f5a623}
+  h2{font-size:18px;color:#e55353;margin:20px 0 4px}
+  .meta{color:#6b8a74;font-size:12px;margin-bottom:24px}
+  table{width:100%;border-collapse:collapse;margin:16px 0}
+  th{background:#f7faf8;padding:9px 12px;font-size:11px;text-transform:uppercase;text-align:left;border-bottom:1px solid #e8f0eb}
+  td{padding:10px 12px;font-size:13px;border-bottom:1px solid #f0f6f2}
+  .total{text-align:right;font-size:15px;font-weight:700;color:#e55353;margin-top:12px}
+  .reason{background:#fef9f9;border:1px solid #fde;border-radius:8px;padding:12px 16px;margin-top:16px;font-size:13px}
+  .footer{margin-top:32px;text-align:center;font-size:11px;color:#a8c5b8;border-top:1px solid #e8f0eb;padding-top:14px}
+  </style></head><body>
+  <div class="brand">Mango<span>Lovers</span></div>
+  <h2>Purchase Return ${r.id}</h2>
+  <div class="meta">Date: ${r.date} &nbsp;|&nbsp; PO: ${r.poId} &nbsp;|&nbsp; Supplier: ${r.supplier} &nbsp;|&nbsp; Status: ${r.status}</div>
+  <table><thead><tr><th>Product</th><th>Qty Returned</th><th>Credit Amount</th></tr></thead>
+  <tbody><tr><td>${r.product}</td><td>${r.qty}</td><td>৳${r.creditAmt.toFixed(2)}</td></tr></tbody></table>
+  <div class="total">Total Credit: ৳${r.creditAmt.toFixed(2)}</div>
+  <div class="reason"><strong>Reason:</strong> ${r.reason}</div>
+  <div class="footer">MangoLovers Inventory System · Generated ${new Date().toLocaleString()}</div>
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 400);
+}
+
+/* ══════════════════════════════════
+   NEW RETURN MODALS
+══════════════════════════════════ */
+function openNewSalesReturn() {
+  openPanel(`
+    <div class="feat-hdr">
+      <div><h3>New Sales Return</h3><p>Record a customer return</p></div>
+      <button class="feat-close" onclick="closePanel()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="feat-body">
+      <div class="feat-row">
+        <div class="feat-field"><label>Original Invoice ID</label><input id="nsr-inv" placeholder="INV-2024-XXXX"></div>
+        <div class="feat-field"><label>Customer Name</label><input id="nsr-cust" placeholder="e.g. Rafiq Ahmed"></div>
+      </div>
+      <div class="feat-row">
+        <div class="feat-field"><label>Product Name</label><input id="nsr-prod" placeholder="e.g. Nike Air Max 270"></div>
+        <div class="feat-field"><label>Qty Returned</label><input id="nsr-qty" type="number" min="1" value="1"></div>
+      </div>
+      <div class="feat-row">
+        <div class="feat-field"><label>Refund Amount (৳)</label><input id="nsr-amt" type="number" step="0.01" placeholder="0.00"></div>
+        <div class="feat-field"><label>Status</label>
+          <select id="nsr-status"><option>Pending</option><option>Processed</option></select>
+        </div>
+      </div>
+      <div class="feat-field"><label>Reason</label><input id="nsr-reason" placeholder="e.g. Wrong size, Damaged, etc."></div>
+    </div>
+    <div class="feat-footer">
+      <button class="btn btn-outline" onclick="closePanel()">Cancel</button>
+      <button class="btn btn-mango" onclick="_addSalesReturn()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Return
+      </button>
+    </div>
+  `, '520px');
+}
+
+function _addSalesReturn() {
+  const inv    = document.getElementById('nsr-inv').value.trim();
+  const cust   = document.getElementById('nsr-cust').value.trim();
+  const prod   = document.getElementById('nsr-prod').value.trim();
+  const qty    = parseInt(document.getElementById('nsr-qty').value) || 1;
+  const amt    = parseFloat(document.getElementById('nsr-amt').value) || 0;
+  const status = document.getElementById('nsr-status').value;
+  const reason = document.getElementById('nsr-reason').value.trim();
+  if (!inv || !cust || !prod) { toast('Invoice, customer and product are required', 'error'); return; }
+  const newR = {
+    id: 'SR-' + String(salesReturns.length + 1).padStart(3, '0'),
+    invoiceId: inv, customer: cust, product: prod,
+    qty, refundAmt: amt, reason, status,
+    date: new Date().toISOString().split('T')[0],
+  };
+  salesReturns.unshift(newR);
+  closePanel();
+  renderSalesReturns();
+  toast('Sales return ' + newR.id + ' recorded');
+}
+
+function openNewPurchaseReturn() {
+  openPanel(`
+    <div class="feat-hdr">
+      <div><h3>New Purchase Return</h3><p>Return items to supplier</p></div>
+      <button class="feat-close" onclick="closePanel()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="feat-body">
+      <div class="feat-row">
+        <div class="feat-field"><label>PO Number</label><input id="npr-po" placeholder="PO-2024-XXXX"></div>
+        <div class="feat-field"><label>Supplier Name</label><input id="npr-supp" placeholder="e.g. TechWorld Distributors"></div>
+      </div>
+      <div class="feat-row">
+        <div class="feat-field"><label>Product Name</label><input id="npr-prod" placeholder="e.g. Sony WH-1000XM5"></div>
+        <div class="feat-field"><label>Qty Returned</label><input id="npr-qty" type="number" min="1" value="1"></div>
+      </div>
+      <div class="feat-row">
+        <div class="feat-field"><label>Credit Amount (৳)</label><input id="npr-amt" type="number" step="0.01" placeholder="0.00"></div>
+        <div class="feat-field"><label>Status</label>
+          <select id="npr-status"><option>Pending</option><option>Approved</option></select>
+        </div>
+      </div>
+      <div class="feat-field"><label>Reason</label><input id="npr-reason" placeholder="e.g. Wrong model, Damaged on delivery, etc."></div>
+    </div>
+    <div class="feat-footer">
+      <button class="btn btn-outline" onclick="closePanel()">Cancel</button>
+      <button class="btn btn-mango" onclick="_addPurchaseReturn()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Return
+      </button>
+    </div>
+  `, '520px');
+}
+
+function _addPurchaseReturn() {
+  const po     = document.getElementById('npr-po').value.trim();
+  const supp   = document.getElementById('npr-supp').value.trim();
+  const prod   = document.getElementById('npr-prod').value.trim();
+  const qty    = parseInt(document.getElementById('npr-qty').value) || 1;
+  const amt    = parseFloat(document.getElementById('npr-amt').value) || 0;
+  const status = document.getElementById('npr-status').value;
+  const reason = document.getElementById('npr-reason').value.trim();
+  if (!po || !supp || !prod) { toast('PO number, supplier and product are required', 'error'); return; }
+  const newR = {
+    id: 'PR-' + String(purchaseReturns.length + 1).padStart(3, '0'),
+    poId: po, supplier: supp, product: prod,
+    qty, creditAmt: amt, reason, status,
+    date: new Date().toISOString().split('T')[0],
+  };
+  purchaseReturns.unshift(newR);
+  closePanel();
+  renderPurchaseReturns();
+  toast('Purchase return ' + newR.id + ' recorded');
+}
+
+/* ══════════════════════════════════
+   NEW PURCHASE ORDER MODAL
+══════════════════════════════════ */
+function openNewPO() {
+  const supplierOptions = suppliersData
+    .map(s => `<option value="${s.name}">${s.name}</option>`)
+    .join('');
+
+  openPanel(`
+    <div class="feat-hdr">
+      <div><h3>New Purchase Order</h3><p>Record a supplier purchase</p></div>
+      <button class="feat-close" onclick="closePanel()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="feat-body">
+      <div class="feat-row">
+        <div class="feat-field"><label>Supplier</label>
+          <select id="npo-supplier">
+            <option value="">— Select Supplier —</option>
+            ${supplierOptions}
+          </select>
+        </div>
+        <div class="feat-field"><label>Payment Status</label>
+          <select id="npo-status">
+            <option value="pending">Pending</option>
+            <option value="paid">Paid (Received)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin:10px 0 8px">Line Items</div>
+      <div id="npo-lines">
+        <div class="npo-line" style="display:grid;grid-template-columns:1fr 70px 90px 28px;gap:6px;margin-bottom:6px">
+          <input placeholder="Item name" class="npo-name">
+          <input type="number" placeholder="Qty" class="npo-qty" min="1" value="1" style="text-align:center">
+          <input type="number" placeholder="Unit cost" class="npo-cost" min="0" step="0.01">
+          <button onclick="this.closest('.npo-line').remove();_recalcPOTotal()" style="background:var(--red-bg);border:none;border-radius:6px;color:var(--red);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">×</button>
+        </div>
+      </div>
+      <button onclick="_addPOLine()" style="font-size:11.5px;padding:5px 12px;border:1px dashed var(--border);border-radius:8px;background:transparent;color:var(--text-soft);cursor:pointer;width:100%;margin-bottom:12px">+ Add Item</button>
+
+      <div class="feat-row">
+        <div class="feat-field"><label>Total Amount (৳)</label>
+          <input id="npo-total" type="number" placeholder="Auto-calculated or override" step="0.01" min="0">
+        </div>
+      </div>
+    </div>
+    <div class="feat-footer">
+      <button class="btn btn-outline" onclick="closePanel()">Cancel</button>
+      <button class="btn btn-mango" onclick="_submitNewPO()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Save Purchase Order
+      </button>
+    </div>
+  `, '520px');
+
+  /* Wire up auto-total on line items */
+  setTimeout(() => {
+    document.getElementById('npo-lines').addEventListener('input', _recalcPOTotal);
+  }, 100);
+}
+
+function _addPOLine() {
+  const line = document.createElement('div');
+  line.className = 'npo-line';
+  line.style.cssText = 'display:grid;grid-template-columns:1fr 70px 90px 28px;gap:6px;margin-bottom:6px';
+  line.innerHTML = `
+    <input placeholder="Item name" class="npo-name">
+    <input type="number" placeholder="Qty" class="npo-qty" min="1" value="1" style="text-align:center">
+    <input type="number" placeholder="Unit cost" class="npo-cost" min="0" step="0.01">
+    <button onclick="this.closest('.npo-line').remove();_recalcPOTotal()" style="background:var(--red-bg);border:none;border-radius:6px;color:var(--red);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">×</button>
+  `;
+  document.getElementById('npo-lines').appendChild(line);
+  line.querySelector('.npo-name').focus();
+}
+
+function _recalcPOTotal() {
+  let total = 0;
+  document.querySelectorAll('.npo-line').forEach(line => {
+    const qty  = parseFloat(line.querySelector('.npo-qty')?.value)  || 0;
+    const cost = parseFloat(line.querySelector('.npo-cost')?.value) || 0;
+    total += qty * cost;
+  });
+  const totalEl = document.getElementById('npo-total');
+  if (totalEl) totalEl.value = total > 0 ? total.toFixed(2) : '';
+}
+
+async function _submitNewPO() {
+  const supplierName  = document.getElementById('npo-supplier').value;
+  const paymentStatus = document.getElementById('npo-status').value;
+  const totalOverride = parseFloat(document.getElementById('npo-total').value) || 0;
+
+  if (!supplierName) { toast('Please select a supplier', 'error'); return; }
+
+  const lineItems = [];
+  document.querySelectorAll('.npo-line').forEach(line => {
+    const name     = line.querySelector('.npo-name')?.value.trim();
+    const qty      = parseFloat(line.querySelector('.npo-qty')?.value)  || 0;
+    const unitCost = parseFloat(line.querySelector('.npo-cost')?.value) || 0;
+    if (name && qty > 0) lineItems.push({ name, qty, unitCost });
+  });
+
+  const lineTotal = lineItems.reduce((s, li) => s + li.qty * li.unitCost, 0);
+  const total = totalOverride || lineTotal;
+
+  if (total <= 0) { toast('Please enter an amount or add line items', 'error'); return; }
+
+  const btn = document.querySelector('.feat-footer .btn-mango');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  let result;
+  if (typeof savePurchaseToDB === 'function') {
+    result = await savePurchaseToDB({ supplierName, paymentStatus, total, lineItems });
+  } else {
+    /* Fallback: add locally */
+    const d = new Date().toISOString().split('T')[0];
+    const due = new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0];
+    purchases.unshift({
+      id: 'PO-LOCAL-' + Date.now(),
+      supplier: supplierName,
+      items: lineItems.length || 1,
+      itemSummary: lineItems.map(l=>l.name).join(', ') || '—',
+      total,
+      status: paymentStatus === 'paid' ? 'Received' : 'Pending',
+      date: d,
+      dueDate: due,
+      lineItems,
+    });
+    renderPurchases();
+    result = { success: true };
+  }
+
+  if (result.success) {
+    closePanel();
+    toast('Purchase order saved successfully');
+  } else {
+    toast('Error: ' + result.error, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Purchase Order'; }
+  }
+}
+
 /* ══════════════════════════════════
    WIRE UP: PATCH renderProducts to attach button handlers
 ══════════════════════════════════ */
 const _origRenderProducts = window.renderProducts;
 window.renderProducts = function() {
   _origRenderProducts();
-  document.querySelectorAll('#productsTbody tr').forEach((tr, i) => {
-    const p = (() => {
-      const q   = document.getElementById('productSearch').value.toLowerCase();
-      const filt = products.filter(x =>
-        (x.name.toLowerCase().includes(q) || x.sku.toLowerCase().includes(q)) &&
-        (pCatFilter === 'All' || x.category === pCatFilter) &&
-        (pStatFilter === 'All' || x.status === pStatFilter)
-      );
-      return filt[i];
-    })();
-    if (!p) return;
-    const [viewBtn, editBtn, delBtn] = tr.querySelectorAll('.act-btn');
-    if (viewBtn) viewBtn.onclick = () => viewProduct(p);
-    if (editBtn) editBtn.onclick = () => editProduct(p);
-    if (delBtn)  delBtn.onclick  = () => deleteProduct(p);
-  });
+  // Buttons wired via data-pid attributes set during render
 };
+// Called from inline onclick in renderProducts template
+function _prodAction(action, pid) {
+  const p = products.find(x => String(x.id) === String(pid));
+  if (!p) return;
+  if (action === 'view')   viewProduct(p);
+  if (action === 'edit')   editProduct(p);
+  if (action === 'delete') deleteProduct(p);
+  if (action === 'stock')  editStock(p);
+}
 
-/* WIRE UP: Sales table buttons */
+/* WIRE UP: Sales table — inline onclick used, no wrapper needed */
 const _origRenderSalesTable = window.renderSalesTable;
-window.renderSalesTable = function() {
-  _origRenderSalesTable();
-  document.querySelectorAll('#salesTbody tr').forEach((tr, i) => {
-    const q    = document.getElementById('salesSearch').value.toLowerCase();
-    const filt = recentSales.filter(s =>
-      (s.customer.toLowerCase().includes(q) || s.id.toLowerCase().includes(q)) &&
-      (salesFilter === 'All' || s.status === salesFilter)
-    );
-    const s = filt[i];
-    if (!s) return;
-    const [viewBtn, printBtn, retBtn] = tr.querySelectorAll('.act-btn');
-    if (viewBtn)  viewBtn.onclick  = () => viewInvoice(s);
-    if (printBtn) printBtn.onclick = () => printSale(s);
-    if (retBtn)   retBtn.onclick   = () => toast(`Return initiated for ${s.id}`, 'info');
-  });
-};
+window.renderSalesTable = function() { _origRenderSalesTable(); };
 
-/* WIRE UP: Purchases table buttons */
+/* WIRE UP: Purchases — inline onclick via _poAction, no wrapper needed */
 const _origRenderPurchases = window.renderPurchases;
-window.renderPurchases = function() {
-  _origRenderPurchases();
-  document.querySelectorAll('#purchasesTbody tr').forEach((tr, i) => {
-    const po = purchases[i];
-    if (!po) return;
-    const [viewBtn, editBtn, confirmBtn] = tr.querySelectorAll('.act-btn');
-    if (viewBtn)    viewBtn.onclick    = () => viewPurchaseOrder(po);
-    if (editBtn)    editBtn.onclick    = () => confirmPO(po);
-    if (confirmBtn) confirmBtn.onclick = () => confirmPO(po);
-  });
-};
+window.renderPurchases = function() { _origRenderPurchases(); };
 
 /* WIRE UP: Suppliers table buttons */
 const _origRenderSuppliers = window.renderSuppliers;
-window.renderSuppliers = function() {
-  _origRenderSuppliers();
-  document.querySelectorAll('#suppliersTbody tr').forEach((tr, i) => {
-    const s = suppliersData[i];
-    if (!s) return;
-    const [viewBtn, editBtn] = tr.querySelectorAll('.act-btn');
-    if (viewBtn) viewBtn.onclick = () => viewSupplier(s);
-    if (editBtn) editBtn.onclick = () => editSupplier(s);
-  });
-};
+window.renderSuppliers = function() { _origRenderSuppliers(); };
+function _suppAction(action, idx) {
+  const s = suppliersData[idx];
+  if (!s) return;
+  if (action === 'view') viewSupplier(s);
+  if (action === 'edit') editSupplier(s);
+}
 
 /* WIRE UP: Customer cards */
 const _origRenderCustomers = window.renderCustomers;
-window.renderCustomers = function(filter = '') {
-  _origRenderCustomers(filter);
-  document.querySelectorAll('.customer-card').forEach((card, i) => {
-    const filt = customers.filter(c =>
-      c.name.toLowerCase().includes(filter.toLowerCase()) || c.phone.includes(filter)
-    );
-    const c = filt[i];
-    if (!c) return;
-    card.style.cursor = 'pointer';
-    card.onclick = () => viewCustomer(c);
-  });
-};
+window.renderCustomers = function(filter = '') { _origRenderCustomers(filter); };
+function _custAction(idx) {
+  const c = customers[idx];
+  if (c) viewCustomer(c);
+}
 
-/* WIRE UP: Invoices table print/view buttons */
+/* WIRE UP: Invoices — inline onclick, no wrapper needed */
 const _origRenderInvoices = window.renderInvoices;
-window.renderInvoices = function() {
-  _origRenderInvoices();
-  document.querySelectorAll('#invoicesTbody tr').forEach((tr, i) => {
-    const s = recentSales[i];
-    if (!s) return;
-    const [viewBtn, printBtn] = tr.querySelectorAll('.act-btn');
-    if (viewBtn)  viewBtn.onclick  = () => viewInvoice(s);
-    if (printBtn) printBtn.onclick = () => printSale(s);
-  });
-};
+window.renderInvoices = function() { _origRenderInvoices(); };
 
 /* ══════════════════════════════════
    VIEW PURCHASE ORDER DETAIL
 ══════════════════════════════════ */
 function viewPurchaseOrder(po) {
   const statusColor = { Received:'var(--green)', Pending:'var(--mango-dk)', Overdue:'var(--red)', 'In Transit':'var(--blue)' };
+  const sc = statusColor[po.status] || 'var(--text)';
   openPanel(`
     <div class="feat-hdr">
       <div><h3>${po.id}</h3><p>${po.supplier}</p></div>
@@ -1086,38 +1602,84 @@ function viewPurchaseOrder(po) {
     </div>
     <div class="feat-body">
       <div class="feat-info-grid">
-        <div class="feat-info-box" style="grid-column:span 2">
+        <div class="feat-info-box">
           <div class="feat-info-lbl">Supplier</div>
           <div class="feat-info-val">${po.supplier}</div>
         </div>
         <div class="feat-info-box">
-          <div class="feat-info-lbl">Total Value</div>
-          <div class="feat-info-val" style="color:var(--mint)">৳${po.total.toLocaleString()}</div>
-        </div>
-        <div class="feat-info-box">
-          <div class="feat-info-lbl">Items</div>
-          <div class="feat-info-val">${po.items}</div>
+          <div class="feat-info-lbl">Status</div>
+          <div class="feat-info-val" style="color:${sc}">${po.status}</div>
         </div>
         <div class="feat-info-box">
           <div class="feat-info-lbl">Order Date</div>
-          <div class="feat-info-val" style="font-size:13px">${po.date}</div>
+          <div class="feat-info-val" style="font-size:12px">${po.date}</div>
         </div>
         <div class="feat-info-box">
           <div class="feat-info-lbl">Due Date</div>
-          <div class="feat-info-val" style="font-size:13px;color:${po.status==='Overdue'?'var(--red)':'inherit'}">${po.dueDate}</div>
+          <div class="feat-info-val" style="font-size:12px;color:${po.status==='Overdue'?'var(--red)':'inherit'}">${po.dueDate}</div>
         </div>
-        <div class="feat-info-box" style="grid-column:span 2">
-          <div class="feat-info-lbl">Status</div>
-          <div class="feat-info-val" style="color:${statusColor[po.status]||'var(--text)'}">${po.status}</div>
-        </div>
+      </div>
+      <div class="feat-divider"></div>
+      <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin-bottom:8px">Items Ordered</div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:0">
+        <thead>
+          <tr style="background:var(--bg)">
+            <th style="text-align:left;padding:7px 10px;font-size:10.5px;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--border)">Product</th>
+            <th style="text-align:center;padding:7px 8px;font-size:10.5px;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--border)">Qty</th>
+            <th style="text-align:right;padding:7px 8px;font-size:10.5px;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--border)">Unit Cost</th>
+            <th style="text-align:right;padding:7px 10px;font-size:10.5px;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--border)">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody id="po-line-items">
+          <tr><td colspan="4" style="padding:14px;text-align:center;color:var(--text-faint);font-size:12px">Loading items…</td></tr>
+        </tbody>
+      </table>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 10px;border-top:2px solid var(--border)">
+        <span style="font-size:12px;font-weight:700;color:var(--text-soft)">TOTAL</span>
+        <span style="font-size:22px;font-weight:800;color:var(--mint);font-family:monospace">৳${po.total.toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
       </div>
     </div>
     <div class="feat-footer">
       <button class="btn btn-outline" onclick="closePanel()">Close</button>
       <button class="btn btn-primary" onclick="closePanel();confirmPO(window._viewPO)">Update Status</button>
     </div>
-  `, '480px');
+  `, '560px');
   window._viewPO = po;
+
+  requestAnimationFrame(async () => {
+    const tbody = document.getElementById('po-line-items');
+    if (!tbody) return;
+
+    if (po.lineItems && po.lineItems.length) {
+      _renderLineItemsTbody(tbody, po.lineItems);
+      return;
+    }
+
+    if (typeof db !== 'undefined' && po._dbId) {
+      try {
+        const { data, error } = await db
+          .from('supplier_purchase_items')
+          .select('quantity, unit_cost, subtotal, items(name, UoM)')
+          .eq('purchase_id', po._dbId);
+        if (!error && data && data.length) {
+          po.lineItems = data.map(r => ({
+            name:      r.items?.name || '—',
+            uom:       r.items?.UoM  || '',
+            qty:       r.quantity,
+            unitPrice: parseFloat(r.unit_cost),
+            subtotal:  parseFloat(r.subtotal),
+          }));
+          _renderLineItemsTbody(tbody, po.lineItems);
+          return;
+        }
+      } catch(e) { console.warn('PO items fetch error:', e); }
+    }
+
+    _renderLineItemsTbody(tbody, [{
+      name: 'Ordered items (' + po.items + ')',
+      qty: po.items, unitPrice: po.total / po.items, subtotal: po.total
+    }]);
+  });
 }
 
 /* ══════════════════════════════════
@@ -1143,6 +1705,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   const custGrid = document.getElementById('customerGrid');
   if (custGrid) custGridObs.observe(custGrid, { childList: true });
+
+  // Wire up New Return buttons
+  const srBtn = document.querySelector('#page-sales-returns .btn-primary');
+  if (srBtn) srBtn.onclick = () => openNewSalesReturn();
+  const prBtn = document.querySelector('#page-purchase-returns .btn-primary');
+  if (prBtn) prBtn.onclick = () => openNewPurchaseReturn();
 
   // Add Supplier button
   const suppSection = document.getElementById('page-suppliers');
@@ -1179,16 +1747,8 @@ document.addEventListener('DOMContentLoaded', () => {
 /* ══════════════════════════════════
    DASHBOARD RECENT SALES: add click-to-view
 ══════════════════════════════════ */
+/* Dashboard recent sales — inline onclick, no wrapper needed */
 const _origRenderRecentSales = window.renderRecentSales;
-window.renderRecentSales = function() {
-  _origRenderRecentSales();
-  document.querySelectorAll('#recentSalesTbody tr').forEach((tr, i) => {
-    const s = recentSales[i];
-    if (!s) return;
-    tr.style.cursor = 'pointer';
-    tr.title = 'Click to view invoice';
-    tr.onclick = () => viewInvoice(s);
-  });
-};
+window.renderRecentSales = function() { _origRenderRecentSales(); };
 
 console.log('✅ MangoLovers Features loaded: Invoice print, Stock edit, Product edit/delete, Customer/Supplier CRUD, Export CSV, Toast system');

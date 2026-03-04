@@ -61,6 +61,16 @@ CREATE TABLE supplier_purchases (
     payment_status VARCHAR(50) DEFAULT 'paid'
 );
 
+CREATE TABLE supplier_purchase_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    purchase_id UUID REFERENCES supplier_purchases(id) ON DELETE CASCADE,
+    item_id VARCHAR(20) REFERENCES items(id) ON DELETE CASCADE,
+    quantity INTEGER NOT NULL,
+    unit_cost NUMERIC(10,2) NOT NULL, -- Using unit_cost instead of unit_price
+    subtotal NUMERIC(10,2) NOT NULL
+);
+ALTER TABLE sales ADD COLUMN paid_amount NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE supplier_purchases ADD COLUMN paid_amount NUMERIC(10,2) DEFAULT 0;
 
 INSERT INTO items (id, name, uom, cost_price, selling_price) VALUES
 ('1001', 'প্রিমিয়াম খেজুরের গুঁড় (Premium Date Molasses) (1Kg)', 'Kg', 0.00, 10.00),
@@ -222,3 +232,112 @@ INSERT INTO supplier_purchases (supplier_id, total_amount, purchase_date, paymen
 ((SELECT id FROM suppliers WHERE name = 'North Bengal Rice Traders'), 45000.00, '2026-02-20 09:20:00', 'paid'),
 ((SELECT id FROM suppliers WHERE name = 'Chittagong Dry Fruits Mart'), 88000.00, '2026-02-22 13:10:00', 'paid'),
 ((SELECT id FROM suppliers WHERE name = 'Haor Organic Duck Farm'), 32000.00, '2026-02-25 10:30:00', 'pending');
+
+INSERT INTO sale_items (sale_id, item_id, quantity, unit_price, subtotal) VALUES
+
+-- Sale 1: Rahim Uddin (Total: 1250.00)
+-- 1x মরিয়ম খেজুর Moriam Date (1250.00)
+((SELECT id FROM sales WHERE customer_id = (SELECT id FROM customers WHERE name = 'Rahim Uddin') AND total_amount = 1250.00), '5001', 1, 1250.00, 1250.00),
+
+-- Sale 2: Fatema Begum (Total: 3400.00)
+-- 2x কালোজিরা ফুলের মধু Black Cumin Flower Honey 1kg (1400.00 * 2 = 2800.00)
+-- 1x Coconut oil (নারিকেল তৈল) 500g (600.00)
+((SELECT id FROM sales WHERE customer_id = (SELECT id FROM customers WHERE name = 'Fatema Begum') AND total_amount = 3400.00), '2004', 2, 1400.00, 2800.00),
+((SELECT id FROM sales WHERE customer_id = (SELECT id FROM customers WHERE name = 'Fatema Begum') AND total_amount = 3400.00), '9003', 1, 600.00, 600.00),
+
+-- Sale 3: Kazi Tariqul Islam (Total: 850.00)
+-- 1x Tokma 250gm (250.00)
+-- 1x Coconut oil 250g (270.00)
+-- 1x মিক্স নাট Mixed Nut 200g (180.00)
+-- 1x মেথি 250g (150.00)
+((SELECT id FROM sales WHERE customer_id = (SELECT id FROM customers WHERE name = 'Kazi Tariqul Islam') AND total_amount = 850.00), '4028', 1, 250.00, 250.00),
+((SELECT id FROM sales WHERE customer_id = (SELECT id FROM customers WHERE name = 'Kazi Tariqul Islam') AND total_amount = 850.00), '9004', 1, 270.00, 270.00),
+((SELECT id FROM sales WHERE customer_id = (SELECT id FROM customers WHERE name = 'Kazi Tariqul Islam') AND total_amount = 850.00), '4003', 1, 180.00, 180.00),
+((SELECT id FROM sales WHERE customer_id = (SELECT id FROM customers WHERE name = 'Kazi Tariqul Islam') AND total_amount = 850.00), '4013', 1, 150.00, 150.00),
+
+-- Sale 4: Nusrat Jahan (Total: 5600.00)
+-- 2x সুন্দরবনের মধু Sundarbans Honey 1kg (1800.00 * 2 = 3600.00)
+-- 4x টক দই (350.00 * 4 = 1400.00)
+-- 1x Coconut oil 500g (600.00)
+((SELECT id FROM sales WHERE customer_id = (SELECT id FROM customers WHERE name = 'Nusrat Jahan') AND total_amount = 5600.00), '2008', 2, 1800.00, 3600.00),
+((SELECT id FROM sales WHERE customer_id = (SELECT id FROM customers WHERE name = 'Nusrat Jahan') AND total_amount = 5600.00), '8002', 4, 350.00, 1400.00),
+((SELECT id FROM sales WHERE customer_id = (SELECT id FROM customers WHERE name = 'Nusrat Jahan') AND total_amount = 5600.00), '9003', 1, 600.00, 600.00),
+
+-- Sale 5: Md. Shafiqur Rahman (Total: 2100.00)
+-- 1x ঘি 1Kg Normal (1350.00)
+-- 1x ঘি 500 grams (750.00)
+((SELECT id FROM sales WHERE customer_id = (SELECT id FROM customers WHERE name = 'Md. Shafiqur Rahman') AND total_amount = 2100.00), '3003', 1, 1350.00, 1350.00),
+((SELECT id FROM sales WHERE customer_id = (SELECT id FROM customers WHERE name = 'Md. Shafiqur Rahman') AND total_amount = 2100.00), '3002', 1, 750.00, 750.00),
+
+-- Sale 6: Sadia Afrin (Total: 4200.00)
+-- 2x মেডজুল খেজুর Medjul Date (1650.00 * 2 = 3300.00)
+-- 1x লিচু ফুলের মধু Lychee Flower Honey 1kg (900.00)
+((SELECT id FROM sales WHERE customer_id = (SELECT id FROM customers WHERE name = 'Sadia Afrin') AND total_amount = 4200.00), '5002', 2, 1650.00, 3300.00),
+((SELECT id FROM sales WHERE customer_id = (SELECT id FROM customers WHERE name = 'Sadia Afrin') AND total_amount = 4200.00), '2002', 1, 900.00, 900.00),
+
+-- Sale 7: Arif Hossain (Total: 1500.00)
+-- 2x শিলাজিত 25ml (750.00 * 2 = 1500.00)
+((SELECT id FROM sales WHERE customer_id = (SELECT id FROM customers WHERE name = 'Arif Hossain') AND total_amount = 1500.00), '4008', 2, 750.00, 1500.00),
+
+-- Sale 8: Walk-in / Unregistered Customer (Total: 650.00)
+-- 1x সরিষা ফুলের মধু shorisha honey 1kg (650.00)
+((SELECT id FROM sales WHERE customer_id IS NULL AND total_amount = 650.00), '2000', 1, 650.00, 650.00);
+
+INSERT INTO supplier_purchase_items (purchase_id, item_id, quantity, unit_cost, subtotal) VALUES
+
+-- Purchase 1: Madina Dates & Fruits Importers (Total: 150,000.00)
+-- 100x মেডজুল খেজুর Medjul Date (cost: 1000.00) = 100,000.00
+-- 62.5x আজওয়া খেজুর Azowa Date (cost: 800.00) = 50,000.00 (Using quantity 62 for simplicity, let's adjust math to integers)
+-- Wait, let's use: 100x Medjul (1000) = 100,000 + 100x Safabi (500) = 50,000
+((SELECT id FROM supplier_purchases WHERE supplier_id = (SELECT id FROM suppliers WHERE name = 'Madina Dates & Fruits Importers') AND total_amount = 150000.00), '5002', 100, 1000.00, 100000.00),
+((SELECT id FROM supplier_purchases WHERE supplier_id = (SELECT id FROM suppliers WHERE name = 'Madina Dates & Fruits Importers') AND total_amount = 150000.00), '5004', 100, 500.00, 50000.00),
+
+-- Purchase 2: Deshi Pure Oil Mills (Total: 75,500.00)
+-- 50x সরিষার তৈল 5 Liter (cost: 1000.00) = 50,000.00
+-- 102x সরিষার তৈল 1 Liter (cost: 250.00) = 25,500.00
+((SELECT id FROM supplier_purchases WHERE supplier_id = (SELECT id FROM suppliers WHERE name = 'Deshi Pure Oil Mills') AND total_amount = 75500.00), '3007', 50, 1000.00, 50000.00),
+((SELECT id FROM supplier_purchases WHERE supplier_id = (SELECT id FROM suppliers WHERE name = 'Deshi Pure Oil Mills') AND total_amount = 75500.00), '3005', 102, 250.00, 25500.00),
+
+-- Purchase 3: Sundarban Moual Somity (Total: 120,000.00)
+-- 100x সুন্দরবনের মধু Sundarbans Honey 1kg (cost: 1200.00) = 120,000.00
+((SELECT id FROM supplier_purchases WHERE supplier_id = (SELECT id FROM suppliers WHERE name = 'Sundarban Moual Somity') AND total_amount = 120000.00), '2008', 100, 1200.00, 120000.00),
+
+-- Purchase 4: Nature Herbal & Organics (Total: 25,000.00)
+-- 100x মরিংগা পাওডার (cost: 150.00) = 15,000.00
+-- 50x বিটরুট পাওডার (cost: 200.00) = 10,000.00
+((SELECT id FROM supplier_purchases WHERE supplier_id = (SELECT id FROM suppliers WHERE name = 'Nature Herbal & Organics') AND total_amount = 25000.00), '4004', 100, 150.00, 15000.00),
+((SELECT id FROM supplier_purchases WHERE supplier_id = (SELECT id FROM suppliers WHERE name = 'Nature Herbal & Organics') AND total_amount = 25000.00), '4005', 50, 200.00, 10000.00),
+
+-- Purchase 5: North Bengal Rice Traders (Total: 45,000.00)
+-- 300x চিনিগুড়া চাউল 1kg (cost: 150.00) = 45,000.00
+((SELECT id FROM supplier_purchases WHERE supplier_id = (SELECT id FROM suppliers WHERE name = 'North Bengal Rice Traders') AND total_amount = 45000.00), '7005', 300, 150.00, 45000.00),
+
+-- Purchase 6: Chittagong Dry Fruits Mart (Total: 88,000.00)
+-- 200x কাজু বাদাম (cost: 300.00) = 60,000.00
+-- 100x কাঠ বাদাম (cost: 280.00) = 28,000.00
+((SELECT id FROM supplier_purchases WHERE supplier_id = (SELECT id FROM suppliers WHERE name = 'Chittagong Dry Fruits Mart') AND total_amount = 88000.00), '2011', 200, 300.00, 60000.00),
+((SELECT id FROM supplier_purchases WHERE supplier_id = (SELECT id FROM suppliers WHERE name = 'Chittagong Dry Fruits Mart') AND total_amount = 88000.00), '2010', 100, 280.00, 28000.00),
+
+-- Purchase 7: Haor Organic Duck Farm (Total: 32,000.00)
+-- 100x Desi Duck (cost: 320.00) = 32,000.00
+((SELECT id FROM supplier_purchases WHERE supplier_id = (SELECT id FROM suppliers WHERE name = 'Haor Organic Duck Farm') AND total_amount = 32000.00), '10007', 100, 320.00, 32000.00);
+
+INSERT INTO supplier_purchases (supplier_id, total_amount, purchase_date, payment_status) VALUES
+
+-- Purchase from Madina Dates
+((SELECT id FROM suppliers WHERE name = 'Madina Dates & Fruits Importers'), 125000.00, '2026-03-01 09:15:00', 'paid'),
+
+-- Purchase from Sundarban Moual Somity
+((SELECT id FROM suppliers WHERE name = 'Sundarban Moual Somity'), 85000.50, '2026-03-02 11:30:00', 'pending'),
+
+-- Purchase from Deshi Pure Oil Mills
+((SELECT id FROM suppliers WHERE name = 'Deshi Pure Oil Mills'), 45000.00, '2026-03-03 14:45:00', 'partial'),
+
+-- Purchase from Nature Herbal & Organics
+((SELECT id FROM suppliers WHERE name = 'Nature Herbal & Organics'), 18500.00, '2026-03-03 16:20:00', 'paid'),
+
+-- Purchase from North Bengal Rice Traders
+((SELECT id FROM suppliers WHERE name = 'North Bengal Rice Traders'), 92000.00, '2026-03-04 08:00:00', 'pending'),
+
+-- Second purchase from Madina Dates (to show multiple purchases from the same supplier)
+((SELECT id FROM suppliers WHERE name = 'Madina Dates & Fruits Importers'), 34000.00, '2026-03-04 10:30:00', 'paid');
