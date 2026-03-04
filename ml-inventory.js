@@ -736,6 +736,49 @@ document.getElementById('globalSearch').addEventListener('input',e=>{
   if(e.target.value.length>1){navigate('products');document.getElementById('productSearch').value=e.target.value;renderProducts();}
 });
 
+/* ── FINANCIAL SUMMARY — NET CARD ── */
+function renderFinancialSummary() {
+  // Parse the placeholder values from the DOM (backend will populate these ids)
+  const parse = id => {
+    const el = document.getElementById(id);
+    if (!el) return 0;
+    const raw = el.textContent.replace(/[৳,\s]/g, '');
+    return parseFloat(raw) || 0;
+  };
+
+  const totalSales  = parse('fin-total-sales');
+  const invoiceDue  = parse('fin-invoice-due');
+  const expense     = parse('fin-expense');
+  const net         = totalSales - invoiceDue - expense;
+
+  const netValEl      = document.getElementById('fin-net-val');
+  const netIconBox    = document.getElementById('fin-net-icon-box');
+  const netIcon       = document.getElementById('fin-net-icon');
+  const netAccent     = document.getElementById('fin-net-accent');
+
+  if (!netValEl) return;
+
+  const isPositive = net >= 0;
+  const color      = isPositive ? 'var(--mint)' : 'var(--red)';
+  const bgColor    = isPositive ? 'rgba(60,175,130,0.12)' : 'rgba(229,83,83,0.12)';
+
+  // Format with ৳ sign and 2 decimal places
+  const sign = isPositive ? '' : '-';
+  netValEl.textContent = `${sign}৳${Math.abs(net).toLocaleString('en-IN', {minimumFractionDigits:2})}`;
+  netValEl.style.color = color;
+  netIconBox.style.background = bgColor;
+  netAccent.style.background  = `linear-gradient(90deg,transparent,${color},transparent)`;
+
+  // Swap icon: trending-up for positive, trending-down for negative
+  if (isPositive) {
+    netIcon.setAttribute('stroke', 'var(--mint)');
+    netIcon.innerHTML = '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>';
+  } else {
+    netIcon.setAttribute('stroke', 'var(--red)');
+    netIcon.innerHTML = '<polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>';
+  }
+}
+
 /* ── INIT ── */
 // Remove CSS fade-up from dashboard cards so JS handles them
 document.querySelectorAll('#page-dashboard .fade-up').forEach(el=>el.classList.remove('fade-up'));
@@ -745,6 +788,7 @@ renderProducts(); renderCatPills(); renderCategories(); renderSalesTable();
 renderPurchases(); renderCustomers(); renderSuppliers(); renderInvoices();
 renderSalesReturns(); renderPurchaseReturns();
 renderReports(); renderAnalytics();
+renderFinancialSummary();
 
 // Charts render after layout is ready
 requestAnimationFrame(()=>{

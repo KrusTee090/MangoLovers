@@ -197,6 +197,90 @@
         </div>
       </div>
 
+      <!-- ── FINANCIAL SUMMARY ROW ── -->
+      <div class="fin-divider"></div>
+      <div class="stat-grid g6">
+
+        <!-- Total Sales -->
+        <div class="stat-card fade-up d1">
+          <div class="stat-card-top">
+            <p class="stat-lbl">Total Sales</p>
+            <div class="stat-icon-box" style="background:rgba(60,175,130,0.12)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--mint)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
+          </div>
+          <div class="stat-val" style="color:var(--mint)" id="fin-total-sales">৳3,132.87</div>
+          <div class="stat-foot"><span class="stat-sub">Gross revenue</span></div>
+          <div class="accent-line" style="background:linear-gradient(90deg,transparent,var(--mint),transparent)"></div>
+        </div>
+
+        <!-- Total Purchase -->
+        <div class="stat-card fade-up d2">
+          <div class="stat-card-top">
+            <p class="stat-lbl">Total Purchase</p>
+            <div class="stat-icon-box" style="background:rgba(74,133,232,0.12)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+            </div>
+          </div>
+          <div class="stat-val" style="color:var(--blue)" id="fin-total-purchase">৳28,920.00</div>
+          <div class="stat-foot"><span class="stat-sub">All purchase orders</span></div>
+          <div class="accent-line" style="background:linear-gradient(90deg,transparent,var(--blue),transparent)"></div>
+        </div>
+
+        <!-- Invoice Due -->
+        <div class="stat-card fade-up d3">
+          <div class="stat-card-top">
+            <p class="stat-lbl">Invoice Due</p>
+            <div class="stat-icon-box" style="background:rgba(139,107,232,0.12)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </div>
+          </div>
+          <div class="stat-val" style="color:var(--purple)" id="fin-invoice-due">৳1,848.00</div>
+          <div class="stat-foot"><span class="stat-sub">Owed by customers</span></div>
+          <div class="accent-line" style="background:linear-gradient(90deg,transparent,var(--purple),transparent)"></div>
+        </div>
+
+        <!-- Purchase Due -->
+        <div class="stat-card fade-up d4">
+          <div class="stat-card-top">
+            <p class="stat-lbl">Purchase Due</p>
+            <div class="stat-icon-box" style="background:rgba(245,166,35,0.12)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--mango)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+          </div>
+          <div class="stat-val" style="color:var(--mango-dk)" id="fin-purchase-due">৳21,980.00</div>
+          <div class="stat-foot"><span class="stat-sub">Owed to suppliers</span></div>
+          <div class="accent-line" style="background:linear-gradient(90deg,transparent,var(--mango),transparent)"></div>
+        </div>
+
+        <!-- Expense -->
+        <div class="stat-card fade-up d5">
+          <div class="stat-card-top">
+            <p class="stat-lbl">Expense</p>
+            <div class="stat-icon-box" style="background:rgba(229,83,83,0.12)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V22H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+            </div>
+          </div>
+          <div class="stat-val" style="color:var(--red)" id="fin-expense">৳30,450.00</div>
+          <div class="stat-foot"><span class="stat-sub">All outgoing costs</span></div>
+          <div class="accent-line" style="background:linear-gradient(90deg,transparent,var(--red),transparent)"></div>
+        </div>
+
+        <!-- Net -->
+        <div class="stat-card fade-up d6" id="fin-net-card">
+          <div class="stat-card-top">
+            <p class="stat-lbl">Net</p>
+            <div class="stat-icon-box" id="fin-net-icon-box" style="background:rgba(60,175,130,0.12)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" id="fin-net-icon" stroke="var(--mint)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            </div>
+          </div>
+          <div class="stat-val" id="fin-net-val">৳0.00</div>
+          <div class="stat-foot"><span class="stat-sub">Sales − Invoice Due − Expense</span></div>
+          <div class="accent-line" id="fin-net-accent" style="background:linear-gradient(90deg,transparent,var(--mint),transparent)"></div>
+        </div>
+
+      </div>
+
       <div class="dash-charts">
         <div class="card fade-up d3">
           <div class="card-hdr">
