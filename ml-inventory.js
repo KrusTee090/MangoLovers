@@ -125,7 +125,10 @@ const pageCfg = {
 
 function navigate(page) {
   document.querySelectorAll('.page-section').forEach(s=>s.classList.remove('active'));
-  document.getElementById('page-'+page).classList.add('active');
+  // getElementById fails for IDs with spaces — use querySelector with attribute selector as fallback
+  const pageEl = document.getElementById('page-'+page) ||
+                 document.querySelector(`.page-section[id="page-${page}"]`);
+  if (pageEl) pageEl.classList.add('active');
   document.querySelectorAll('.nav-item[data-page],.settings-nav[data-page]').forEach(n=>{
     n.classList.toggle('active',n.dataset.page===page);
   });
@@ -137,7 +140,7 @@ function navigate(page) {
   else btn.style.display='none';
   window.scrollTo(0,0);
   /* Refresh Purchase & Sell Report when navigating to it */
-  if (page === 'Purchase and Sell Report' && typeof loadSalesPurchaseReport === 'function') {
+  if ((page === 'Purchase and Sell Report' || page === 'purchase-sell-report') && typeof loadSalesPurchaseReport === 'function') {
     loadSalesPurchaseReport();
   }
 }
@@ -433,7 +436,7 @@ function renderRecentSales(){
       <div style="width:24px;height:24px;border-radius:50%;background:var(--mango-bg);border:1px solid rgba(245,166,35,.25);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--mango-dk);flex-shrink:0">${s.customer[0]}</div>
       <span>${s.customer}</span></div></td>
     <td><div style="font-size:11.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.itemSummary||''}"><span class="mono" style="color:var(--text-soft)">${s.items}</span> · ${s.itemSummary||'—'}</div></td>
-    <td><span class="mono" style="font-weight:700">৳${fmt(s.total)}</span></td>
+    <td><span class="mono" style="font-weight:700">৳${fmt(s.lineItems&&s.lineItems.length?s.lineItems.reduce((a,li)=>a+(li.subtotal||0),0):s.total)}</span></td>
     <td><span style="font-size:11.5px;${paymentColor(s.payment)}">${s.payment}</span></td>
     <td>${statusBadge(s.status)}</td>
     <td><span class="mono" style="font-size:10.5px;color:var(--text-faint)">${s.date}</span></td>
@@ -532,7 +535,8 @@ function renderSalesTable(){
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${s.id}</span></td>
     <td><div style="display:flex;align-items:center;gap:7px">
       <div style="width:26px;height:26px;border-radius:50%;background:var(--mango-bg);border:1px solid rgba(245,166,35,.25);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:var(--mango-dk);flex-shrink:0">${s.customer[0]}</div>${s.customer}</div></td>
-    <td><div style="font-size:11.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.itemSummary||''}"><span class="mono" style="color:var(--text-soft)">${s.items}</span> · ${s.itemSummary||'—'}</div></td>
+    <td><div style="font-size:10.5px;color:var(--text-faint);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.lineItems&&s.lineItems.length?s.lineItems.map(li=>li.id||'').filter(Boolean).join(', '):'\xe2\x80\x94'}</div></td>
+    <td><div style="font-size:11.5px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.itemSummary||''}"><span class="mono" style="color:var(--text-soft)">${s.items}</span> · ${s.itemSummary||'—'}</div></td>
     <td><span class="mono" style="font-weight:700">৳${fmt(s.total)}</span></td>
     <td><span style="font-size:11.5px;${paymentColor(s.payment)}">${s.payment}</span></td>
     <td>${statusBadge(s.status)}</td>
@@ -582,9 +586,10 @@ function renderPurchases(){
     <td><span class="mono" style="font-size:11.5px;color:var(--text-soft)">${po.date}</span></td>
     <td><span class="mono" style="font-size:11.5px;${po.status==='Overdue'?'color:var(--red);font-weight:700':'color:var(--text-soft)'}">${po.dueDate}</span></td>
     <td><div class="act-group">
-      <button class="act-btn" title="View" onclick="_poAction('view',purchases.indexOf(po))">${svgIcon(eyeSvg,12)}</button>
-      <button class="act-btn" title="Print" onclick="_poAction('print',purchases.indexOf(po))">${svgIcon(printSvg,12)}</button>
-      <button class="act-btn ok" title="Update status" onclick="_poAction('confirm',purchases.indexOf(po))">${svgIcon(checkSvg,12)}</button>
+      <button class="act-btn" title="View" onclick="_poAction('view',${purchases.indexOf(po)})">${svgIcon(eyeSvg,12)}</button>
+      <button class="act-btn edit" title="Edit" onclick="_poAction('edit',${purchases.indexOf(po)})">${svgIcon(editSvg,12)}</button>
+      <button class="act-btn" title="Print" onclick="_poAction('print',${purchases.indexOf(po)})">${svgIcon(printSvg,12)}</button>
+      <button class="act-btn ok" title="Update status" onclick="_poAction('confirm',${purchases.indexOf(po)})">${svgIcon(checkSvg,12)}</button>
     </div></td>
   </tr>`).join('');
 }
@@ -617,7 +622,7 @@ document.getElementById('customerSearch').addEventListener('input',e=>renderCust
 function renderSuppliers(){
   document.getElementById('suppliersTbody').innerHTML=suppliersData.map((s,i)=>`<tr style="animation:fadeUp .3s ease ${i*45}ms both">
     <td><div><div style="font-weight:600">${s.name}</div><div class="mono" style="font-size:9.5px;color:var(--text-faint)">${s.id}</div></div></td>
-    <td><span class="badge b-blue">${s.category}</span></td>
+    <td style="font-size:12px;color:var(--text-soft)">${s.address || '—'}</td>
     <td style="font-size:12px;color:var(--text-soft)">${s.contact}</td>
     <td><span class="mono" style="font-weight:700">৳${s.totalPurchases.toLocaleString()}</span></td>
     <td><span class="mono" style="${s.outstanding?'color:var(--red);font-weight:700':'color:var(--text-soft)'}">৳${s.outstanding.toLocaleString()}</span></td>

@@ -17,6 +17,7 @@ function _poAction(action, idx) {
   if (!po) return;
   if (action === 'view')    viewPurchaseOrder(po);
   if (action === 'print')   printPurchaseOrder(po);
+  if (action === 'edit')    editPurchaseOrder(po);
   if (action === 'confirm') confirmPO(po);
 }
 
@@ -91,6 +92,7 @@ function printPurchaseOrder(po) {
   </table>
   <div class="totals">
     <div class="totals-row"><span>Subtotal</span><span>৳${po.total.toLocaleString('en-IN',{minimumFractionDigits:2})}</span></div>
+    <div class="totals-row"><span>Paid</span><span style="color:#3caf82">৳${(po.paidAmount||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</span></div>
     <div class="totals-row grand"><span>Total</span><span>৳${po.total.toLocaleString('en-IN',{minimumFractionDigits:2})}</span></div>
   </div>
   <div class="footer">MangoLovers Inventory System · Generated ${new Date().toLocaleString()}</div>
@@ -364,7 +366,7 @@ function viewInvoice(sale) {
       </table>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 10px;border-top:2px solid var(--border);margin-top:0">
         <span style="font-size:12px;font-weight:700;color:var(--text-soft)">TOTAL</span>
-        <span style="font-size:22px;font-weight:800;color:var(--mint);font-family:monospace">৳${sale.total.toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
+        <span id="inv-total-display" style="font-size:22px;font-weight:800;color:var(--mint);font-family:monospace">৳${sale.total.toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
       </div>
     </div>
     <div class="feat-footer">
@@ -386,6 +388,7 @@ function viewInvoice(sale) {
     // If we already have lineItems loaded, render directly
     if (sale.lineItems && sale.lineItems.length) {
       _renderLineItemsTbody(tbody, sale.lineItems);
+      _updateSaleTotal(sale.lineItems);
       return;
     }
 
@@ -394,17 +397,18 @@ function viewInvoice(sale) {
       try {
         const { data, error } = await db
           .from('sale_items')
-          .select('quantity, unit_price, subtotal, items(name, UoM)')
+          .select('quantity, unit_price, subtotal, items(name, uom)')
           .eq('sale_id', sale._dbId);
         if (!error && data && data.length) {
           sale.lineItems = data.map(r => ({
             name:      r.items?.name || '—',
-            uom:       r.items?.UoM  || '',
+            uom:       r.items?.uom  || '',
             qty:       r.quantity,
             unitPrice: parseFloat(r.unit_price),
             subtotal:  parseFloat(r.subtotal),
           }));
           _renderLineItemsTbody(tbody, sale.lineItems);
+          _updateSaleTotal(sale.lineItems);
           return;
         }
       } catch(e) { console.warn('Could not load line items:', e); }
@@ -416,6 +420,13 @@ function viewInvoice(sale) {
       qty: sale.items, unitPrice: sale.total / sale.items, subtotal: sale.total
     }]);
   });
+}
+
+function _updateSaleTotal(lineItems) {
+  const display = document.getElementById('inv-total-display');
+  if (!display || !lineItems || !lineItems.length) return;
+  const sum = lineItems.reduce((acc, li) => acc + (parseFloat(li.subtotal) || 0), 0);
+  display.textContent = '৳' + sum.toLocaleString('en-IN', { minimumFractionDigits: 2 });
 }
 
 function _renderLineItemsTbody(tbody, lines) {
@@ -881,7 +892,7 @@ async function _addCustomer() {
 function viewSupplier(s) {
   openPanel(`
     <div class="feat-hdr">
-      <div><h3>${s.name}</h3><p>${s.id} · ${s.category}</p></div>
+      <div><h3>${s.name}</h3><p>${s.id} · ${s.address}</p></div>
       <button class="feat-close" onclick="closePanel()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -901,8 +912,8 @@ function viewSupplier(s) {
           <div class="feat-info-val" style="color:${s.outstanding?'var(--red)':'var(--green)'}">৳${s.outstanding.toLocaleString()}</div>
         </div>
         <div class="feat-info-box">
-          <div class="feat-info-lbl">Category</div>
-          <div class="feat-info-val">${s.category}</div>
+          <div class="feat-info-lbl">Address</div>
+          <div class="feat-info-val">${s.address}</div>
         </div>
         <div class="feat-info-box">
           <div class="feat-info-lbl">Status</div>
@@ -929,7 +940,7 @@ function editSupplier(s) {
     <div class="feat-body">
       <div class="feat-field"><label>Name *</label><input id="es2-name" value="${s.name}"></div>
       <div class="feat-row">
-        <div class="feat-field"><label>Category</label><input id="es2-cat" value="${s.category}"></div>
+        <div class="feat-field"><label>Address</label><input id="es2-cat" value="${s.address}"></div>
         <div class="feat-field"><label>Contact</label><input id="es2-contact" value="${s.contact}"></div>
       </div>
       <div class="feat-row">
@@ -960,7 +971,7 @@ async function _saveSupplier(sid) {
   if (!name) { toast('Name is required', 'error'); return; }
 
   const idx = suppliersData.findIndex(x => x.id === sid);
-  if (idx > -1) Object.assign(suppliersData[idx], { name, category: cat, contact, status, outstanding });
+  if (idx > -1) Object.assign(suppliersData[idx], { name, address: cat, contact, status, outstanding });
 
   if (typeof db !== 'undefined') {
     try {
@@ -990,7 +1001,7 @@ function openAddSupplier() {
     <div class="feat-body">
       <div class="feat-field"><label>Supplier Name *</label><input id="as-name" placeholder="e.g. TechWorld Distributors"></div>
       <div class="feat-row">
-        <div class="feat-field"><label>Category</label><input id="as-cat" placeholder="e.g. Electronics"></div>
+        <div class="feat-field"><label>Address</label><input id="as-cat" placeholder="e.g. Electronics"></div>
         <div class="feat-field"><label>Phone</label><input id="as-phone" placeholder="+880-1711-000000"></div>
       </div>
       <div class="feat-field"><label>Email</label><input id="as-email" placeholder="supplier@example.com"></div>
@@ -1016,7 +1027,7 @@ async function _addSupplier() {
 
   const newS = {
     id: 'SUP-' + Date.now(),
-    name, category: cat||'General', contact: phone||email||'—',
+    name, address: cat||'General', contact: phone||email||'—',
     totalPurchases: 0, outstanding: 0, status: 'Active',
   };
 
@@ -1039,6 +1050,156 @@ async function _addSupplier() {
 /* ══════════════════════════════════
    CONFIRM PURCHASE ORDER
 ══════════════════════════════════ */
+/* ══════════════════════════════════
+   EDIT PURCHASE ORDER
+══════════════════════════════════ */
+function editPurchaseOrder(po) {
+  const supplierOptions = suppliersData.map(s =>
+    `<option value="${s.name}" ${s.name === po.supplier ? 'selected' : ''}>${s.name}</option>`
+  ).join('');
+  const firstItem = po.lineItems && po.lineItems[0] ? po.lineItems[0] : {};
+
+  openPanel(`
+    <div class="feat-hdr">
+      <div><h3>Edit Purchase Order</h3><p>${po.id}</p></div>
+      <button class="feat-close" onclick="closePanel()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="feat-body">
+      <div class="feat-field">
+        <label>Supplier</label>
+        <select id="edit-po-supplier">${supplierOptions || '<option>' + po.supplier + '</option>'}</select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="feat-field">
+          <label>Item / Product</label>
+          <select id="edit-po-item" onchange="_editPOItemChanged()">
+            <option value="">— Select Item —</option>
+            ${products.map(p => `<option value="${p.id}" data-cost="${p.cost||0}" data-name="${p.name}" ${(firstItem.name===p.name)?'selected':''}>${p.name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="feat-field">
+          <label>Quantity</label>
+          <input id="edit-po-qty" type="number" min="0" value="${firstItem.qty || po.items || 0}" oninput="_editPORecalc()">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="feat-field">
+          <label>Unit Cost (৳)</label>
+          <input id="edit-po-unitcost" type="number" min="0" step="0.01" value="${firstItem.unitPrice || 0}" oninput="_editPORecalc()">
+        </div>
+        <div class="feat-field">
+          <label>Total Amount (৳)</label>
+          <input id="edit-po-total" type="number" min="0" step="0.01" value="${po.total || 0}" style="font-weight:700;color:var(--mint)">
+        </div>
+      </div>
+      <div class="feat-field">
+        <label>Paid Amount (৳)</label>
+        <input id="edit-po-paid" type="number" min="0" step="0.01" value="${po.paidAmount || 0}">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="feat-field">
+          <label>Order Date</label>
+          <input id="edit-po-date" type="date" value="${po.date || ''}">
+        </div>
+        <div class="feat-field">
+          <label>Payment Status</label>
+          <select id="edit-po-status">
+            <option value="pending"      ${po.status==='Pending'    ?'selected':''}>Pending</option>
+            <option value="paid"         ${po.status==='Received'   ?'selected':''}>Received (Paid)</option>
+            <option value="partial_paid" ${po.status==='In Transit' ?'selected':''}>In Transit / Partial</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="feat-footer">
+      <button class="btn btn-outline" onclick="closePanel()">Cancel</button>
+      <button class="btn btn-mango" onclick="_savePOEdit('${po._dbId}', '${po.id}')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Save Changes
+      </button>
+    </div>
+  `, '480px');
+}
+
+function _editPOItemChanged() {
+  const sel = document.getElementById('edit-po-item');
+  const opt = sel?.options[sel.selectedIndex];
+  const cost = parseFloat(opt?.dataset.cost) || 0;
+  const costInput = document.getElementById('edit-po-unitcost');
+  if (costInput && cost > 0) {
+    costInput.value = cost.toFixed(2);
+    _editPORecalc();
+  }
+}
+
+function _editPORecalc() {
+  const qty  = parseFloat(document.getElementById('edit-po-qty')?.value)      || 0;
+  const cost = parseFloat(document.getElementById('edit-po-unitcost')?.value) || 0;
+  const totalEl = document.getElementById('edit-po-total');
+  if (totalEl) totalEl.value = (qty * cost).toFixed(2);
+}
+
+async function _savePOEdit(dbId, poDisplayId) {
+  const supplier  = document.getElementById('edit-po-supplier')?.value?.trim();
+  const itemSel   = document.getElementById('edit-po-item');
+  const itemOpt   = itemSel?.options[itemSel?.selectedIndex];
+  const itemId    = itemSel?.value || null;
+  const itemName  = itemOpt?.dataset.name || itemOpt?.text || '';
+  const qty       = parseFloat(document.getElementById('edit-po-qty')?.value) || 0;
+  const unitCost  = parseFloat(document.getElementById('edit-po-unitcost')?.value) || 0;
+  const total     = parseFloat(document.getElementById('edit-po-total')?.value) || (qty * unitCost);
+  const paid      = parseFloat(document.getElementById('edit-po-paid')?.value) || 0;
+  const dateVal   = document.getElementById('edit-po-date')?.value;
+  const statusRaw = document.getElementById('edit-po-status')?.value;
+
+  if (!supplier) { toast('Please select a supplier', 'warning'); return; }
+
+  const statusDisplayMap = { paid:'Received', pending:'Pending', partial_paid:'In Transit' };
+  const idx = purchases.findIndex(p => p._dbId === dbId);
+  if (idx > -1) {
+    purchases[idx].supplier    = supplier;
+    purchases[idx].total       = total;
+    purchases[idx].paidAmount  = paid;
+    purchases[idx].status      = statusDisplayMap[statusRaw] || 'Pending';
+    purchases[idx].date        = dateVal || purchases[idx].date;
+    purchases[idx].items       = qty || purchases[idx].items;
+    purchases[idx].itemSummary = itemName || purchases[idx].itemSummary;
+    if (purchases[idx].lineItems && purchases[idx].lineItems[0]) {
+      purchases[idx].lineItems[0].name      = itemName || purchases[idx].lineItems[0].name;
+      purchases[idx].lineItems[0].qty       = qty;
+      purchases[idx].lineItems[0].subtotal  = total;
+      purchases[idx].lineItems[0].unitPrice = qty > 0 ? total / qty : 0;
+    }
+  }
+
+  if (typeof db !== 'undefined' && dbId) {
+    try {
+      let supplierId = null;
+      const { data: supRows } = await db.from('suppliers').select('supplier_id').ilike('name', supplier).limit(1);
+      if (supRows && supRows.length) supplierId = supRows[0].supplier_id;
+
+      const payload = { total_amount: total, paid_amount: paid, payment_status: statusRaw, quantity: qty };
+      if (itemId) payload.item_id = itemId;
+      if (dateVal) payload.purchase_date = new Date(dateVal).toISOString();
+      if (supplierId) payload.supplier_id = supplierId;
+
+      const { error } = await db.from('supplier_purchases').update(payload).eq('id', dbId);
+      if (error) throw error;
+      await loadPurchases();
+      toast(`${poDisplayId} updated successfully`);
+    } catch (err) {
+      toast('Saved locally · DB error: ' + err.message, 'warning');
+      renderPurchases();
+    }
+  } else {
+    renderPurchases();
+    toast(`${poDisplayId} updated locally`);
+  }
+  closePanel();
+}
+
 function confirmPO(po) {
   openPanel(`
     <div class="feat-hdr">
@@ -1400,10 +1561,34 @@ function _addPurchaseReturn() {
 /* ══════════════════════════════════
    NEW PURCHASE ORDER MODAL
 ══════════════════════════════════ */
+function _npoLineHtml(itemOptions) {
+  return `
+    <div class="npo-line" style="display:grid;grid-template-columns:90px 1fr 60px 95px 90px 26px;gap:6px;margin-bottom:8px;align-items:center">
+      <div style="position:relative">
+        <input class="npo-id-input" placeholder="Product ID" autocomplete="off"
+          style="width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11px;font-family:monospace;box-sizing:border-box"
+          oninput="_npoIdInput(event)" onblur="_npoIdBlur(event)">
+        <div class="npo-id-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);max-height:160px;overflow-y:auto;margin-top:2px"></div>
+      </div>
+      <select class="npo-item-select" onchange="_npoSelectChange(event)"
+        style="padding:7px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11.5px;box-sizing:border-box;width:100%">
+        <option value="">— Select Item —</option>
+        ${itemOptions}
+      </select>
+      <input type="number" class="npo-qty" min="1" value="1" oninput="_npoRecalcLine(event)"
+        style="text-align:center;padding:7px 6px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;width:100%;box-sizing:border-box">
+      <input type="number" class="npo-cost" min="0" step="0.01" placeholder="0.00" oninput="_npoRecalcLine(event)"
+        style="text-align:right;padding:7px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;width:100%;box-sizing:border-box">
+      <input type="number" class="npo-subtotal" readonly
+        style="text-align:right;padding:7px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--mint);font-size:12px;font-weight:700;width:100%;box-sizing:border-box;cursor:default">
+      <button onclick="this.closest('.npo-line').remove();_recalcPOTotal()"
+        style="background:var(--red-bg);border:none;border-radius:6px;color:var(--red);cursor:pointer;font-size:15px;width:26px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>
+    </div>`;
+}
+
 function openNewPO() {
-  const supplierOptions = suppliersData
-    .map(s => `<option value="${s.name}">${s.name}</option>`)
-    .join('');
+  const supplierOptions = suppliersData.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+  const itemOptions = products.map(p => `<option value="${p.id}" data-cost="${p.cost||0}" data-name="${p.name}">${p.name}</option>`).join('');
 
   openPanel(`
     <div class="feat-hdr">
@@ -1428,21 +1613,22 @@ function openNewPO() {
         </div>
       </div>
 
-      <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin:10px 0 8px">Line Items</div>
-      <div id="npo-lines">
-        <div class="npo-line" style="display:grid;grid-template-columns:1fr 70px 90px 28px;gap:6px;margin-bottom:6px">
-          <input placeholder="Item name" class="npo-name">
-          <input type="number" placeholder="Qty" class="npo-qty" min="1" value="1" style="text-align:center">
-          <input type="number" placeholder="Unit cost" class="npo-cost" min="0" step="0.01">
-          <button onclick="this.closest('.npo-line').remove();_recalcPOTotal()" style="background:var(--red-bg);border:none;border-radius:6px;color:var(--red);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">×</button>
-        </div>
+      <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin:12px 0 6px">Line Items</div>
+      <div style="display:grid;grid-template-columns:90px 1fr 60px 95px 90px 26px;gap:6px;margin-bottom:4px;padding:0 1px">
+        <span style="font-size:9.5px;color:var(--text-faint);font-weight:700;text-transform:uppercase">Product ID</span>
+        <span style="font-size:9.5px;color:var(--text-faint);font-weight:700;text-transform:uppercase">Item Name</span>
+        <span style="font-size:9.5px;color:var(--text-faint);font-weight:700;text-transform:uppercase;text-align:center">Qty</span>
+        <span style="font-size:9.5px;color:var(--text-faint);font-weight:700;text-transform:uppercase;text-align:right">Unit Cost</span>
+        <span style="font-size:9.5px;color:var(--text-faint);font-weight:700;text-transform:uppercase;text-align:right">Subtotal</span>
+        <span></span>
       </div>
+      <div id="npo-lines">${_npoLineHtml(itemOptions)}</div>
       <button onclick="_addPOLine()" style="font-size:11.5px;padding:5px 12px;border:1px dashed var(--border);border-radius:8px;background:transparent;color:var(--text-soft);cursor:pointer;width:100%;margin-bottom:12px">+ Add Item</button>
 
-      <div class="feat-row">
-        <div class="feat-field"><label>Total Amount (৳)</label>
-          <input id="npo-total" type="number" placeholder="Auto-calculated or override" step="0.01" min="0">
-        </div>
+      <div style="display:flex;justify-content:flex-end;align-items:center;gap:12px;padding:10px 2px;border-top:1px solid var(--border)">
+        <span style="font-size:12px;color:var(--text-soft);font-weight:600">TOTAL</span>
+        <span id="npo-total-display" style="font-size:20px;font-weight:800;color:var(--mint);font-family:monospace">৳0.00</span>
+        <input id="npo-total" type="hidden" value="0">
       </div>
     </div>
     <div class="feat-footer">
@@ -1452,58 +1638,145 @@ function openNewPO() {
         Save Purchase Order
       </button>
     </div>
-  `, '520px');
-
-  /* Wire up auto-total on line items */
-  setTimeout(() => {
-    document.getElementById('npo-lines').addEventListener('input', _recalcPOTotal);
-  }, 100);
+  `, '640px');
 }
 
 function _addPOLine() {
-  const line = document.createElement('div');
-  line.className = 'npo-line';
-  line.style.cssText = 'display:grid;grid-template-columns:1fr 70px 90px 28px;gap:6px;margin-bottom:6px';
-  line.innerHTML = `
-    <input placeholder="Item name" class="npo-name">
-    <input type="number" placeholder="Qty" class="npo-qty" min="1" value="1" style="text-align:center">
-    <input type="number" placeholder="Unit cost" class="npo-cost" min="0" step="0.01">
-    <button onclick="this.closest('.npo-line').remove();_recalcPOTotal()" style="background:var(--red-bg);border:none;border-radius:6px;color:var(--red);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">×</button>
-  `;
-  document.getElementById('npo-lines').appendChild(line);
-  line.querySelector('.npo-name').focus();
+  const itemOptions = products.map(p => `<option value="${p.id}" data-cost="${p.cost||0}" data-name="${p.name}">${p.name}</option>`).join('');
+  const div = document.createElement('div');
+  div.innerHTML = _npoLineHtml(itemOptions);
+  document.getElementById('npo-lines').appendChild(div.firstElementChild);
+}
+
+/* Fill a line from a product object */
+function _npoFillLine(line, product) {
+  const idInput  = line.querySelector('.npo-id-input');
+  const sel      = line.querySelector('.npo-item-select');
+  const costIn   = line.querySelector('.npo-cost');
+  if (idInput) idInput.value = product.id || '';
+  if (sel) {
+    // select matching option
+    for (let i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === product.id) { sel.selectedIndex = i; break; }
+    }
+  }
+  if (costIn) costIn.value = product.cost > 0 ? Number(product.cost).toFixed(2) : '';
+  _npoRecalcLine({ target: costIn || line.querySelector('.npo-qty') });
+}
+
+/* Product ID input — show live dropdown */
+function _npoIdInput(e) {
+  const input = e.target;
+  const line  = input.closest('.npo-line');
+  const val   = input.value.trim().toLowerCase();
+  const dropdown = line.querySelector('.npo-id-dropdown');
+
+  if (!val || val.length < 1) { dropdown.style.display = 'none'; return; }
+
+  const matches = products.filter(p =>
+    p.id.toLowerCase().includes(val) || p.name.toLowerCase().includes(val)
+  ).slice(0, 8);
+
+  if (!matches.length) { dropdown.style.display = 'none'; return; }
+
+  dropdown.innerHTML = matches.map(p => `
+    <div class="npo-id-opt" data-id="${p.id}" style="padding:7px 10px;cursor:pointer;font-size:11.5px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <span style="font-family:monospace;color:var(--mint);font-size:10.5px">${p.id}</span>
+        <span style="color:var(--text);margin-left:8px">${p.name}</span>
+      </div>
+      <span style="color:var(--text-soft);font-size:11px;font-family:monospace">৳${Number(p.cost||0).toFixed(2)}</span>
+    </div>`).join('');
+
+  dropdown.querySelectorAll('.npo-id-opt').forEach(opt => {
+    opt.addEventListener('mousedown', ev => {
+      ev.preventDefault();
+      const pid = opt.dataset.id;
+      const product = products.find(p => p.id === pid);
+      if (product) {
+        input.value = product.id;
+        dropdown.style.display = 'none';
+        _npoFillLine(line, product);
+      }
+    });
+    opt.addEventListener('mouseover', () => opt.style.background = 'var(--border)');
+    opt.addEventListener('mouseout',  () => opt.style.background = '');
+  });
+
+  dropdown.style.display = 'block';
+}
+
+function _npoIdBlur(e) {
+  const line = e.target.closest('.npo-line');
+  const dropdown = line?.querySelector('.npo-id-dropdown');
+  setTimeout(() => { if (dropdown) dropdown.style.display = 'none'; }, 150);
+
+  // Exact match on blur
+  const val = e.target.value.trim();
+  const product = products.find(p => p.id === val);
+  if (product) _npoFillLine(line, product);
+}
+
+/* Name dropdown changed — fill ID + cost */
+function _npoSelectChange(e) {
+  const line = e.target.closest('.npo-line');
+  const opt  = e.target.options[e.target.selectedIndex];
+  const pid  = opt.value;
+  const product = products.find(p => p.id === pid);
+  if (product) {
+    const idInput = line.querySelector('.npo-id-input');
+    const costIn  = line.querySelector('.npo-cost');
+    if (idInput) idInput.value = product.id;
+    if (costIn)  costIn.value  = product.cost > 0 ? Number(product.cost).toFixed(2) : '';
+    _npoRecalcLine({ target: costIn });
+  }
+}
+
+/* Recalc one line's subtotal then update grand total */
+function _npoRecalcLine(e) {
+  const line = e?.target?.closest('.npo-line');
+  if (!line) return;
+  const qty  = parseFloat(line.querySelector('.npo-qty')?.value)  || 0;
+  const cost = parseFloat(line.querySelector('.npo-cost')?.value) || 0;
+  const sub  = line.querySelector('.npo-subtotal');
+  if (sub) sub.value = qty > 0 && cost > 0 ? (qty * cost).toFixed(2) : '';
+  _recalcPOTotal();
 }
 
 function _recalcPOTotal() {
   let total = 0;
   document.querySelectorAll('.npo-line').forEach(line => {
-    const qty  = parseFloat(line.querySelector('.npo-qty')?.value)  || 0;
-    const cost = parseFloat(line.querySelector('.npo-cost')?.value) || 0;
-    total += qty * cost;
+    total += parseFloat(line.querySelector('.npo-subtotal')?.value) || 0;
   });
-  const totalEl = document.getElementById('npo-total');
-  if (totalEl) totalEl.value = total > 0 ? total.toFixed(2) : '';
+  const hidden  = document.getElementById('npo-total');
+  const display = document.getElementById('npo-total-display');
+  if (hidden)  hidden.value = total.toFixed(2);
+  if (display) display.textContent = '৳' + total.toLocaleString('en-IN', {minimumFractionDigits:2});
 }
+
+/* Keep old _onPOLineChange for backward compat */
+function _onPOLineChange(e) { _npoRecalcLine(e); }
 
 async function _submitNewPO() {
   const supplierName  = document.getElementById('npo-supplier').value;
   const paymentStatus = document.getElementById('npo-status').value;
-  const totalOverride = parseFloat(document.getElementById('npo-total').value) || 0;
+  const total         = parseFloat(document.getElementById('npo-total').value) || 0;
 
   if (!supplierName) { toast('Please select a supplier', 'error'); return; }
 
   const lineItems = [];
   document.querySelectorAll('.npo-line').forEach(line => {
-    const name     = line.querySelector('.npo-name')?.value.trim();
+    const sel      = line.querySelector('.npo-item-select');
+    const opt      = sel?.options[sel?.selectedIndex];
+    const itemId   = sel?.value || null;
+    const name     = opt?.dataset.name || opt?.text || '';
     const qty      = parseFloat(line.querySelector('.npo-qty')?.value)  || 0;
     const unitCost = parseFloat(line.querySelector('.npo-cost')?.value) || 0;
-    if (name && qty > 0) lineItems.push({ name, qty, unitCost });
+    if (itemId && qty > 0) lineItems.push({ name, itemId, qty, unitCost });
   });
 
-  const lineTotal = lineItems.reduce((s, li) => s + li.qty * li.unitCost, 0);
-  const total = totalOverride || lineTotal;
-
-  if (total <= 0) { toast('Please enter an amount or add line items', 'error'); return; }
+  if (lineItems.length === 0) { toast('Please select at least one item', 'error'); return; }
+  if (total <= 0) { toast('Total must be greater than zero', 'error'); return; }
 
   const btn = document.querySelector('.feat-footer .btn-mango');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
@@ -1512,19 +1785,15 @@ async function _submitNewPO() {
   if (typeof savePurchaseToDB === 'function') {
     result = await savePurchaseToDB({ supplierName, paymentStatus, total, lineItems });
   } else {
-    /* Fallback: add locally */
-    const d = new Date().toISOString().split('T')[0];
+    const d   = new Date().toISOString().split('T')[0];
     const due = new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0];
     purchases.unshift({
-      id: 'PO-LOCAL-' + Date.now(),
-      supplier: supplierName,
-      items: lineItems.length || 1,
-      itemSummary: lineItems.map(l=>l.name).join(', ') || '—',
-      total,
+      _dbId: null, id: 'PO-LOCAL-' + Date.now(),
+      supplier: supplierName, items: lineItems.length,
+      itemSummary: lineItems.map(l => l.name).join(', '),
+      total, paidAmount: paymentStatus === 'paid' ? total : 0,
       status: paymentStatus === 'paid' ? 'Received' : 'Pending',
-      date: d,
-      dueDate: due,
-      lineItems,
+      date: d, dueDate: due, lineItems,
     });
     renderPurchases();
     result = { success: true };
@@ -1538,6 +1807,7 @@ async function _submitNewPO() {
     if (btn) { btn.disabled = false; btn.textContent = 'Save Purchase Order'; }
   }
 }
+
 
 /* ══════════════════════════════════
    WIRE UP: PATCH renderProducts to attach button handlers
@@ -1640,51 +1910,284 @@ function viewPurchaseOrder(po) {
       </div>
     </div>
     <div class="feat-footer">
-      <button class="btn btn-outline" onclick="closePanel()">Close</button>
+      <button class="btn btn-outline" onclick="closePanel();editPurchaseOrder(window._viewPO)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Edit
+      </button>
+      <button class="btn btn-outline" onclick="printPurchaseOrder(window._viewPO)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Print
+      </button>
       <button class="btn btn-primary" onclick="closePanel();confirmPO(window._viewPO)">Update Status</button>
     </div>
   `, '560px');
   window._viewPO = po;
 
-  requestAnimationFrame(async () => {
+  // Render items immediately from already-loaded data
+  requestAnimationFrame(() => {
     const tbody = document.getElementById('po-line-items');
     if (!tbody) return;
-
     if (po.lineItems && po.lineItems.length) {
       _renderLineItemsTbody(tbody, po.lineItems);
-      return;
+    } else {
+      _renderLineItemsTbody(tbody, [{
+        name: po.itemSummary || 'Ordered items',
+        qty: po.items, unitPrice: po.total / Math.max(po.items,1), subtotal: po.total
+      }]);
     }
-
-    if (typeof db !== 'undefined' && po._dbId) {
-      try {
-        const { data, error } = await db
-          .from('supplier_purchase_items')
-          .select('quantity, unit_cost, subtotal, items(name, UoM)')
-          .eq('purchase_id', po._dbId);
-        if (!error && data && data.length) {
-          po.lineItems = data.map(r => ({
-            name:      r.items?.name || '—',
-            uom:       r.items?.UoM  || '',
-            qty:       r.quantity,
-            unitPrice: parseFloat(r.unit_cost),
-            subtotal:  parseFloat(r.subtotal),
-          }));
-          _renderLineItemsTbody(tbody, po.lineItems);
-          return;
-        }
-      } catch(e) { console.warn('PO items fetch error:', e); }
-    }
-
-    _renderLineItemsTbody(tbody, [{
-      name: 'Ordered items (' + po.items + ')',
-      qty: po.items, unitPrice: po.total / po.items, subtotal: po.total
-    }]);
   });
 }
 
 /* ══════════════════════════════════
    WIRE UP: ADD BUTTONS in sections
 ══════════════════════════════════ */
+/* ══════════════════════════════════
+   NEW SALE MODAL
+══════════════════════════════════ */
+function _nsiLineHtml(itemOptions) {
+  return `
+    <div class="nsi-line" style="display:grid;grid-template-columns:90px 1fr 60px 95px 90px 26px;gap:6px;margin-bottom:8px;align-items:center">
+      <div style="position:relative">
+        <input class="nsi-id-input" placeholder="Product ID" autocomplete="off"
+          style="width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11px;font-family:monospace;box-sizing:border-box"
+          oninput="_nsiIdInput(event)" onblur="_nsiIdBlur(event)">
+        <div class="nsi-id-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);max-height:160px;overflow-y:auto;margin-top:2px"></div>
+      </div>
+      <select class="nsi-item-select" onchange="_nsiSelectChange(event)"
+        style="padding:7px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11.5px;box-sizing:border-box;width:100%">
+        <option value="">— Select Item —</option>
+        ${itemOptions}
+      </select>
+      <input type="number" class="nsi-qty" min="1" value="1" oninput="_nsiRecalcLine(event)"
+        style="text-align:center;padding:7px 6px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;width:100%;box-sizing:border-box">
+      <input type="number" class="nsi-price" min="0" step="0.01" placeholder="0.00" oninput="_nsiRecalcLine(event)"
+        style="text-align:right;padding:7px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;width:100%;box-sizing:border-box">
+      <input type="number" class="nsi-subtotal" readonly
+        style="text-align:right;padding:7px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--mint);font-size:12px;font-weight:700;width:100%;box-sizing:border-box;cursor:default">
+      <button onclick="this.closest('.nsi-line').remove();_nsiRecalcTotal()"
+        style="background:var(--red-bg);border:none;border-radius:6px;color:var(--red);cursor:pointer;font-size:15px;width:26px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>
+    </div>`;
+}
+
+function openNewSale() {
+  const customerOptions = customers.map(c => `<option value="${c.id}" data-name="${c.name}">${c.name}</option>`).join('');
+  const itemOptions = products.map(p => `<option value="${p.id}" data-price="${p.price||0}" data-name="${p.name}">${p.name}</option>`).join('');
+
+  openPanel(`
+    <div class="feat-hdr">
+      <div><h3>New Sale</h3><p>Record a customer sale</p></div>
+      <button class="feat-close" onclick="closePanel()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="feat-body">
+      <div class="feat-row">
+        <div class="feat-field"><label>Customer</label>
+          <select id="nsi-customer">
+            <option value="">— Walk-in / Select Customer —</option>
+            ${customerOptions}
+          </select>
+        </div>
+        <div class="feat-field"><label>Payment Method</label>
+          <select id="nsi-payment">
+            <option value="cash">Cash</option>
+            <option value="card">Card</option>
+            <option value="bkash">bKash</option>
+            <option value="nagad">Nagad</option>
+          </select>
+        </div>
+      </div>
+      <div class="feat-field">
+        <label>Payment Status</label>
+        <select id="nsi-status">
+          <option value="paid">Paid</option>
+          <option value="pending">Pending</option>
+        </select>
+      </div>
+
+      <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin:12px 0 6px">Line Items</div>
+      <div style="display:grid;grid-template-columns:90px 1fr 60px 95px 90px 26px;gap:6px;margin-bottom:4px;padding:0 1px">
+        <span style="font-size:9.5px;color:var(--text-faint);font-weight:700;text-transform:uppercase">Product ID</span>
+        <span style="font-size:9.5px;color:var(--text-faint);font-weight:700;text-transform:uppercase">Item Name</span>
+        <span style="font-size:9.5px;color:var(--text-faint);font-weight:700;text-transform:uppercase;text-align:center">Qty</span>
+        <span style="font-size:9.5px;color:var(--text-faint);font-weight:700;text-transform:uppercase;text-align:right">Unit Price</span>
+        <span style="font-size:9.5px;color:var(--text-faint);font-weight:700;text-transform:uppercase;text-align:right">Subtotal</span>
+        <span></span>
+      </div>
+      <div id="nsi-lines">${_nsiLineHtml(itemOptions)}</div>
+      <button onclick="_addSaleLine()" style="font-size:11.5px;padding:5px 12px;border:1px dashed var(--border);border-radius:8px;background:transparent;color:var(--text-soft);cursor:pointer;width:100%;margin-bottom:12px">+ Add Item</button>
+
+      <div style="display:flex;justify-content:flex-end;align-items:center;gap:12px;padding:10px 2px;border-top:1px solid var(--border)">
+        <span style="font-size:12px;color:var(--text-soft);font-weight:600">TOTAL</span>
+        <span id="nsi-total-display" style="font-size:20px;font-weight:800;color:var(--mint);font-family:monospace">৳0.00</span>
+        <input id="nsi-total" type="hidden" value="0">
+      </div>
+    </div>
+    <div class="feat-footer">
+      <button class="btn btn-outline" onclick="closePanel()">Cancel</button>
+      <button class="btn btn-mango" onclick="_submitNewSale()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Save Sale
+      </button>
+    </div>
+  `, '640px');
+}
+
+function _addSaleLine() {
+  const itemOptions = products.map(p => `<option value="${p.id}" data-price="${p.price||0}" data-name="${p.name}">${p.name}</option>`).join('');
+  const div = document.createElement('div');
+  div.innerHTML = _nsiLineHtml(itemOptions);
+  document.getElementById('nsi-lines').appendChild(div.firstElementChild);
+}
+
+function _nsiFillLine(line, product) {
+  const idInput = line.querySelector('.nsi-id-input');
+  const sel     = line.querySelector('.nsi-item-select');
+  const priceIn = line.querySelector('.nsi-price');
+  if (idInput) idInput.value = product.id || '';
+  if (sel) {
+    for (let i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === product.id) { sel.selectedIndex = i; break; }
+    }
+  }
+  if (priceIn) priceIn.value = product.price > 0 ? Number(product.price).toFixed(2) : '';
+  _nsiRecalcLine({ target: priceIn || line.querySelector('.nsi-qty') });
+}
+
+function _nsiIdInput(e) {
+  const input    = e.target;
+  const line     = input.closest('.nsi-line');
+  const val      = input.value.trim().toLowerCase();
+  const dropdown = line.querySelector('.nsi-id-dropdown');
+
+  if (!val) { dropdown.style.display = 'none'; return; }
+
+  const matches = products.filter(p =>
+    p.id.toLowerCase().includes(val) || p.name.toLowerCase().includes(val)
+  ).slice(0, 8);
+
+  if (!matches.length) { dropdown.style.display = 'none'; return; }
+
+  dropdown.innerHTML = matches.map(p => `
+    <div class="nsi-id-opt" data-id="${p.id}" style="padding:7px 10px;cursor:pointer;font-size:11.5px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <span style="font-family:monospace;color:var(--mint);font-size:10.5px">${p.id}</span>
+        <span style="color:var(--text);margin-left:8px">${p.name}</span>
+      </div>
+      <span style="color:var(--text-soft);font-size:11px;font-family:monospace">৳${Number(p.price||0).toFixed(2)}</span>
+    </div>`).join('');
+
+  dropdown.querySelectorAll('.nsi-id-opt').forEach(opt => {
+    opt.addEventListener('mousedown', ev => {
+      ev.preventDefault();
+      const product = products.find(p => p.id === opt.dataset.id);
+      if (product) { input.value = product.id; dropdown.style.display = 'none'; _nsiFillLine(line, product); }
+    });
+    opt.addEventListener('mouseover', () => opt.style.background = 'var(--border)');
+    opt.addEventListener('mouseout',  () => opt.style.background = '');
+  });
+
+  dropdown.style.display = 'block';
+}
+
+function _nsiIdBlur(e) {
+  const line = e.target.closest('.nsi-line');
+  const dropdown = line?.querySelector('.nsi-id-dropdown');
+  setTimeout(() => { if (dropdown) dropdown.style.display = 'none'; }, 150);
+  const product = products.find(p => p.id === e.target.value.trim());
+  if (product) _nsiFillLine(line, product);
+}
+
+function _nsiSelectChange(e) {
+  const line    = e.target.closest('.nsi-line');
+  const product = products.find(p => p.id === e.target.value);
+  if (product) {
+    const idInput = line.querySelector('.nsi-id-input');
+    const priceIn = line.querySelector('.nsi-price');
+    if (idInput) idInput.value = product.id;
+    if (priceIn) priceIn.value = product.price > 0 ? Number(product.price).toFixed(2) : '';
+    _nsiRecalcLine({ target: priceIn });
+  }
+}
+
+function _nsiRecalcLine(e) {
+  const line = e?.target?.closest('.nsi-line');
+  if (!line) return;
+  const qty   = parseFloat(line.querySelector('.nsi-qty')?.value)   || 0;
+  const price = parseFloat(line.querySelector('.nsi-price')?.value) || 0;
+  const sub   = line.querySelector('.nsi-subtotal');
+  if (sub) sub.value = qty > 0 && price > 0 ? (qty * price).toFixed(2) : '';
+  _nsiRecalcTotal();
+}
+
+function _nsiRecalcTotal() {
+  let total = 0;
+  document.querySelectorAll('.nsi-line').forEach(line => {
+    total += parseFloat(line.querySelector('.nsi-subtotal')?.value) || 0;
+  });
+  const hidden  = document.getElementById('nsi-total');
+  const display = document.getElementById('nsi-total-display');
+  if (hidden)  hidden.value = total.toFixed(2);
+  if (display) display.textContent = '৳' + total.toLocaleString('en-IN', {minimumFractionDigits:2});
+}
+
+async function _submitNewSale() {
+  const customerId    = document.getElementById('nsi-customer').value || null;
+  const paymentMethod = document.getElementById('nsi-payment').value;
+  const paymentStatus = document.getElementById('nsi-status').value;
+
+  const lineItems = [];
+  document.querySelectorAll('.nsi-line').forEach(line => {
+    const sel      = line.querySelector('.nsi-item-select');
+    const itemId   = sel?.value || null;
+    const name     = products.find(p => p.id === itemId)?.name || '';
+    const qty      = parseFloat(line.querySelector('.nsi-qty')?.value)   || 0;
+    const price    = parseFloat(line.querySelector('.nsi-price')?.value) || 0;
+    const subtotal = parseFloat(line.querySelector('.nsi-subtotal')?.value) || (qty * price);
+    if (itemId && qty > 0) lineItems.push({ itemId, name, qty, unitPrice: price, subtotal });
+  });
+
+  if (lineItems.length === 0) { toast('Please add at least one item', 'error'); return; }
+
+  const btn = document.querySelector('.feat-footer .btn-mango');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  try {
+    if (typeof db === 'undefined') throw new Error('DB not connected');
+
+    // 1. Insert sale header
+    const { data: saleRows, error: saleErr } = await db
+      .from('sales')
+      .insert([{
+        customer_id:    customerId,
+        payment_type:   paymentMethod,
+        payment_status: paymentStatus,
+        sale_date:      new Date().toISOString(),
+      }])
+      .select();
+    if (saleErr) throw saleErr;
+    const saleId = saleRows[0].id;
+
+    // 2. Insert sale_items rows
+    const itemRows = lineItems.map(li => ({
+      sale_id:    saleId,
+      item_id:    li.itemId,
+      quantity:   li.qty,
+      unit_price: li.unitPrice,
+      subtotal:   li.subtotal,
+    }));
+    const { error: itemsErr } = await db.from('sale_items').insert(itemRows);
+    if (itemsErr) throw itemsErr;
+
+    await loadSales();
+    closePanel();
+    toast('Sale recorded successfully');
+  } catch (err) {
+    toast('Error saving sale: ' + err.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Sale'; }
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   // Add Customer button
   const custSection = document.getElementById('page-customers');

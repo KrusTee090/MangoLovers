@@ -414,7 +414,7 @@
     <div class="page-section" id="page-sales">
       <div class="section-hdr">
         <div><h2>Sales</h2><p>Manage all transactions</p></div>
-        <button class="btn btn-primary"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Sale</button>
+        <button class="btn btn-primary" onclick="openNewSale()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Sale</button>
       </div>
       <div class="stat-grid g3" style="margin-bottom:14px">
         <div class="mini-stat fade-up d1"><div class="mini-stat-icon" style="background:var(--green-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div><div class="mini-stat-val" style="color:var(--green)">৳3,132</div><div class="mini-stat-lbl">Total Revenue</div></div></div>
@@ -431,7 +431,7 @@
         </div>
       </div>
       <div class="card"><div class="tbl-wrap"><table>
-        <thead><tr><th>Invoice</th><th>Customer</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th>Date</th><th></th></tr></thead>
+        <thead><tr><th>Invoice</th><th>Customer</th><th>Product ID</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th>Date</th><th></th></tr></thead>
         <tbody id="salesTbody"></tbody>
       </table></div></div>
     </div>
@@ -513,7 +513,7 @@
     <div class="page-section" id="page-suppliers">
       <div class="section-hdr"><div><h2>Suppliers</h2><p>6 registered suppliers</p></div><button class="btn btn-primary"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Supplier</button></div>
       <div class="card"><div class="tbl-wrap"><table>
-        <thead><tr><th>Supplier</th><th>Category</th><th>Contact</th><th>Total Purchases</th><th>Outstanding</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Supplier</th><th>Address</th><th>Contact</th><th>Total Purchases</th><th>Outstanding</th><th>Status</th><th></th></tr></thead>
         <tbody id="suppliersTbody"></tbody>
       </table></div></div>
     </div>

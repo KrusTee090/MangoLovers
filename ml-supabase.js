@@ -70,10 +70,13 @@ async function loadDashboardStats() {
     const today = new Date().toISOString().split('T')[0];
     const { data: todaySales } = await db
       .from('sales')
-      .select('total_amount')
+      .select('id, sale_items!sale_items_sale_id_fkey(subtotal)')
       .gte('sale_date', `${today}T00:00:00`)
       .lte('sale_date', `${today}T23:59:59`);
-    const todayRevenue = (todaySales || []).reduce((sum, s) => sum + parseFloat(s.total_amount), 0);
+    const todayRevenue = (todaySales || []).reduce((sum, s) => {
+      const items = Array.isArray(s.sale_items) ? s.sale_items : [];
+      return sum + items.reduce((a, si) => a + parseFloat(si.subtotal || 0), 0);
+    }, 0);
 
     // Pending orders
     const { count: pendingOrders } = await db
@@ -207,8 +210,10 @@ async function loadSuppliers() {
     const mapped = (data || []).map(row => ({
       id:              row.id,
       name:            row.name,
-      category:        '—',
+      address:         row.address || '—',
       contact:         row.phone || row.email || '—',
+      email:           row.email || '—',
+      phone:           row.phone || '—',
       totalPurchases:  0,
       outstanding:     0,
       status:          'Active',
@@ -227,52 +232,71 @@ async function loadSuppliers() {
 /* ═══════════════════════════════════════════════════════════
    SALES
    ═══════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   SALES
+   ═══════════════════════════════════════════════════════════ */
 async function loadSales() {
   try {
-    // Fetch sales + their line items + item names in one query
     const { data, error } = await db
       .from('sales')
       .select(`
-        id, total_amount, payment_type, payment_status, sale_date, paid_amount,
-        customers ( name ),
-        sale_items (
-          quantity, unit_price, subtotal,
-          items ( id, name, UoM )
+        id, payment_type, payment_status, sale_date, paid_amount,
+        customers!customer_id(name),
+        sale_items!sale_items_sale_id_fkey(
+          id, quantity, unit_price, subtotal,
+          items!item_id(id, name, uom)
         )
       `)
       .order('sale_date', { ascending: false })
       .limit(200);
+
     if (error) throw error;
 
-    // payment_status → display status
     const statusMap = { paid: 'Completed', pending: 'Pending', partial: 'Pending', partial_paid: 'Pending' };
-    // payment_type capitalisation
-    const payLabel = t => ({ bkash:'bKash', nagad:'Nagad', cash:'Cash', card:'Card' }[t] || t);
+    const payLabel = t => ({ bkash:'bKash', nagad:'Nagad', cash:'Cash', card:'Card' }[String(t).toLowerCase()] || t);
 
     const mapped = (data || []).map(row => {
-      const lineItems = (row.sale_items || []).map(si => ({
-        name:      si.items?.name || '—',
-        uom:       si.items?.UoM  || '',
-        qty:       si.quantity,
-        unitPrice: parseFloat(si.unit_price),
-        subtotal:  parseFloat(si.subtotal),
-      }));
+      // Safely handle customer object or array
+      const cust = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+      const customerName = cust?.name || 'Walk-in';
 
-      // Build a short item summary for the table column
+      // Safely handle sale_items and nested items
+      const sItems = Array.isArray(row.sale_items) ? row.sale_items : (row.sale_items ? [row.sale_items] : []);
+      const lineItems = sItems.map(si => {
+        const itemObj = Array.isArray(si.items) ? si.items[0] : si.items;
+        return {
+          id:        itemObj?.id   || '',
+          name:      itemObj?.name || 'Unknown Item',
+          uom:       itemObj?.uom  || '',
+          qty:       si.quantity || 0,
+          unitPrice: parseFloat(si.unit_price) || 0,
+          subtotal:  parseFloat(si.subtotal) || 0,
+        };
+      });
+
       const itemSummary = lineItems.length
         ? lineItems.map(li => li.name.length > 30 ? li.name.slice(0, 28) + '…' : li.name).join(', ')
         : '—';
 
+      // Safe date parsing to prevent JS crashes
+      let sd = '—';
+      if (row.sale_date) {
+        try {
+          const sdate = new Date(row.sale_date);
+          if (!isNaN(sdate)) sd = sdate.toISOString().replace('T', ' ').slice(0, 16);
+        } catch(e) {}
+      }
+
       return {
-        _dbId:       row.id,                                         // keep raw UUID for sub-queries
-        id:          row.id.slice(0, 8).toUpperCase(),
-        customer:    row.customers?.name || 'Walk-in',
+        _dbId:       row.id,
+        id:          String(row.id).slice(0, 8).toUpperCase(),
+        customer:    customerName,
         items:       lineItems.length || 1,
         itemSummary: itemSummary,
-        total:       parseFloat(row.total_amount),
+        total:       lineItems.reduce((s, li) => s + li.subtotal, 0),
         payment:     payLabel(row.payment_type || 'cash'),
         status:      statusMap[row.payment_status] || 'Completed',
-        date:        row.sale_date ? row.sale_date.replace('T', ' ').slice(0, 16) : '—',
+        date:        sd,
         lineItems:   lineItems,
       };
     });
@@ -294,6 +318,7 @@ async function loadSales() {
 
   } catch (err) {
     console.error('Load sales error:', err);
+    showBanner('error', `❌ Sales failed to load: ${err.message}`);
   }
 }
 
@@ -303,46 +328,59 @@ async function loadSales() {
 async function loadPurchases() {
   try {
     const { data, error } = await db
-      .from('supplier_purchases')
-      .select(`
-        id, total_amount, purchase_date, payment_status, paid_amount,
-        suppliers ( name ),
-        supplier_purchase_items (
-          quantity, unit_cost, subtotal,
-          items ( id, name, UoM )
-        )
-      `)
-      .order('purchase_date', { ascending: false })
-      .limit(200);
+        .from('supplier_purchases')
+        .select(`
+          id, total_amount, purchase_date, payment_status, paid_amount,
+          quantity, item_id,
+          suppliers(name),
+          items!item_id(id, name, uom)
+        `)
+        .order('purchase_date', { ascending: false })
+        .limit(200);
+
     if (error) throw error;
 
     const statusMap = { paid: 'Received', pending: 'Pending', partial_paid: 'In Transit', partial: 'In Transit' };
 
     const mapped = (data || []).map(row => {
-      const lineItems = (row.supplier_purchase_items || []).map(pi => ({
-        name:      pi.items?.name || '—',
-        uom:       pi.items?.UoM  || '',
-        qty:       pi.quantity,
-        unitPrice: parseFloat(pi.unit_cost),
-        subtotal:  parseFloat(pi.subtotal),
-      }));
+      // Safely handle supplier
+      const supp = Array.isArray(row.suppliers) ? row.suppliers[0] : row.suppliers;
+      const supplierName = supp?.name || '—';
+
+      // Build line item directly from supplier_purchases row fields
+      const itemObj = Array.isArray(row.items) ? row.items[0] : row.items;
+      const lineItems = itemObj ? [{
+        name:      itemObj.name || 'Unknown Item',
+        uom:       itemObj.uom  || '',
+        qty:       row.quantity || 0,
+        unitPrice: parseFloat(itemObj.cost_price) || (row.quantity > 0 ? parseFloat(row.total_amount) / row.quantity : 0),
+        subtotal:  parseFloat(row.total_amount) || 0,
+      }] : [];
 
       const itemSummary = lineItems.length
         ? lineItems.map(li => li.name.length > 30 ? li.name.slice(0, 28) + '…' : li.name).join(', ')
         : '—';
 
-      const d = row.purchase_date ? row.purchase_date.split('T')[0] : '—';
-      const due = row.purchase_date
-        ? new Date(new Date(row.purchase_date).getTime() + 30*24*60*60*1000).toISOString().split('T')[0]
-        : '—';
+      // Safe date calculations
+      let d = '—', due = '—';
+      if (row.purchase_date) {
+        try {
+          const pd = new Date(row.purchase_date);
+          if (!isNaN(pd)) {
+            d = pd.toISOString().split('T')[0];
+            due = new Date(pd.getTime() + 30*24*60*60*1000).toISOString().split('T')[0];
+          }
+        } catch(e) {}
+      }
 
       return {
         _dbId:       row.id,
-        id:          'PO-' + row.id.slice(0, 8).toUpperCase(),
-        supplier:    row.suppliers?.name || '—',
+        id:          'PO-' + String(row.id).slice(0, 8).toUpperCase(),
+        supplier:    supplierName,
         items:       lineItems.length || 1,
         itemSummary: itemSummary,
-        total:       parseFloat(row.total_amount),
+        total:       parseFloat(row.total_amount) || 0,
+        paidAmount:  parseFloat(row.paid_amount)  || 0,
         status:      statusMap[row.payment_status] || 'Pending',
         date:        d,
         dueDate:     due,
@@ -366,8 +404,10 @@ async function loadPurchases() {
 
   } catch (err) {
     console.error('Load purchases error:', err);
+    showBanner('error', `❌ Purchases failed to load: ${err.message}`);
   }
 }
+
 
 /* ═══════════════════════════════════════════════════════════
    SAVE NEW PURCHASE ORDER TO SUPABASE
@@ -385,35 +425,24 @@ async function savePurchaseToDB(formData) {
       if (supRows && supRows.length) supplierId = supRows[0].id;
     }
 
-    /* 2. Insert the purchase header */
+    /* 2. Resolve first line item — supplier_purchases stores item_id & quantity directly */
+    const firstItem = formData.lineItems && formData.lineItems.length
+      ? formData.lineItems.filter(li => li.qty > 0)[0]
+      : null;
+
+    /* 3. Insert purchase row (no separate line-items table needed) */
     const { data: poRows, error: poErr } = await db
       .from('supplier_purchases')
       .insert([{
         supplier_id:    supplierId,
+        item_id:        firstItem?.itemId || null,
+        quantity:       firstItem?.qty    || null,
         total_amount:   parseFloat(formData.total) || 0,
         payment_status: formData.paymentStatus || 'pending',
         purchase_date:  new Date().toISOString(),
       }])
       .select();
     if (poErr) throw poErr;
-    const newPO = poRows[0];
-
-    /* 3. Insert line items if provided */
-    if (formData.lineItems && formData.lineItems.length && newPO) {
-      const lineRows = formData.lineItems
-        .filter(li => li.name && li.qty > 0)
-        .map(li => ({
-          purchase_id: newPO.id,
-          item_id:   li.itemId || null,
-          quantity:  li.qty,
-          unit_cost: li.unitCost,
-          subtotal:  li.qty * li.unitCost,
-        }));
-      if (lineRows.length) {
-        const { error: liErr } = await db.from('supplier_purchase_items').insert(lineRows);
-        if (liErr) console.warn('Line items insert error:', liErr.message);
-      }
-    }
 
     await loadPurchases();
     return { success: true };
@@ -424,164 +453,88 @@ async function savePurchaseToDB(formData) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   SALES & PURCHASE REPORT
+   SALES & PURCHASE REPORT (Updated error checking)
    ═══════════════════════════════════════════════════════════ */
 
-async function loadSalesPurchaseReport(range) {
-  // Determine range from the dateFilter dropdown if not passed
-  if (!range) {
-    const sel = document.getElementById('dateFilter');
-    range = sel ? sel.value : 'This Year';
-  }
+function loadSalesPurchaseReport() {
   try {
-    let salesQuery = db.from('sales')
-      .select('id, total_amount, payment_status, sale_date, customers(name)')
-      .order('sale_date', { ascending: false });
-    let purchaseQuery = db.from('supplier_purchases')
-      .select('id, total_amount, payment_status, purchase_date, suppliers(name)')
-      .order('purchase_date', { ascending: false });
+    const totalSale     = recentSales.reduce((s, r) => s + (r.total || 0), 0);
+    const saleDue       = recentSales.filter(r => r.status === 'Pending').reduce((s, r) => s + (r.total || 0), 0);
+    const totalPurchase = purchases.reduce((s, p) => s + (p.total || 0), 0);
+    const purchaseDue   = purchases.filter(p => p.status === 'Pending' || p.status === 'In Transit').reduce((s, p) => s + (p.total || 0), 0);
 
-    /* ───────────── DATE FILTERING ───────────── */
-    const now = new Date();
-    const pad = n => String(n).padStart(2,'0');
-    const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-
-    let startDate = null, endDate = null;
-
-    if (range === 'Today') {
-      startDate = endDate = ymd(now);
-    } else if (range === 'Yesterday') {
-      const y = new Date(now); y.setDate(y.getDate()-1);
-      startDate = endDate = ymd(y);
-    } else if (range === 'Last 7 Days') {
-      const s = new Date(now); s.setDate(s.getDate()-6);
-      startDate = ymd(s); endDate = ymd(now);
-    } else if (range === 'Last 30 Days') {
-      const s = new Date(now); s.setDate(s.getDate()-29);
-      startDate = ymd(s); endDate = ymd(now);
-    } else if (range === 'This Month') {
-      startDate = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
-      endDate = ymd(now);
-    } else if (range === 'Last Month') {
-      const first = new Date(now.getFullYear(), now.getMonth()-1, 1);
-      const last  = new Date(now.getFullYear(), now.getMonth(), 0);
-      startDate = ymd(first); endDate = ymd(last);
-    } else if (range === 'This Year' || range === 'this_year') {
-      startDate = `${now.getFullYear()}-01-01`;
-      endDate = ymd(now);
-    } else if (range === 'Last Year') {
-      startDate = `${now.getFullYear()-1}-01-01`;
-      endDate   = `${now.getFullYear()-1}-12-31`;
-    }
-    // 'Custom Range' — no server filter, show all (could be enhanced later)
-
-    if (startDate) {
-      salesQuery    = salesQuery.gte('sale_date', `${startDate}T00:00:00`);
-      purchaseQuery = purchaseQuery.gte('purchase_date', `${startDate}T00:00:00`);
-    }
-    if (endDate) {
-      salesQuery    = salesQuery.lte('sale_date', `${endDate}T23:59:59`);
-      purchaseQuery = purchaseQuery.lte('purchase_date', `${endDate}T23:59:59`);
-    }
-
-    const [{ data: sales }, { data: purches }] = await Promise.all([salesQuery, purchaseQuery]);
-
-    /* ───────────── CALCULATE SALES ───────────── */
-    let totalSale = 0, saleDue = 0;
-    (sales || []).forEach(s => {
-      const amount = parseFloat(s.total_amount) || 0;
-      totalSale += amount;
-      if (s.payment_status !== 'paid') saleDue += amount;
-    });
-
-    /* ───────────── CALCULATE PURCHASES ───────────── */
-    let totalPurchase = 0, purchaseDue = 0;
-    (purches || []).forEach(p => {
-      const amount = parseFloat(p.total_amount) || 0;
-      totalPurchase += amount;
-      if (p.payment_status !== 'paid') purchaseDue += amount;
-    });
-
-    /* ───────────── UPDATE SUMMARY CARDS ───────────── */
-    setText('totalPurchase', totalPurchase);
-    setText('purchaseIncTax', totalPurchase);        // same (no separate tax field)
+    setText('totalPurchase',        totalPurchase);
+    setText('purchaseIncTax',       totalPurchase);
     setText('purchaseReturnIncTax', 0);
-    setText('purchaseDue', purchaseDue);
-    setText('totalSale', totalSale);
-    setText('saleIncTax', totalSale);
-    setText('saleReturnIncTax', 0);
-    setText('saleDue', saleDue);
-    setText('saleMinusPurchase', totalSale - totalPurchase, true);
-    setText('totalDueAmount', saleDue - purchaseDue, true);
+    setText('purchaseDue',          purchaseDue);
+    setText('totalSale',            totalSale);
+    setText('saleIncTax',           totalSale);
+    setText('saleReturnIncTax',     0);
+    setText('saleDue',              saleDue);
+    setText('saleMinusPurchase',    totalSale - totalPurchase, true);
+    setText('totalDueAmount',       saleDue   - purchaseDue,   true);
 
-    /* ───────────── POPULATE TRANSACTIONS TABLE ───────────── */
     const tbody = document.getElementById('psrTbody');
-    if (tbody) {
-      const statusBadgePSR = (st, type) => {
-        const map = {
-          paid:         ['b-green',  'Paid'],
-          pending:      ['b-mango',  'Pending'],
-          partial_paid: ['b-mango',  'Partial'],
-          partial:      ['b-mango',  'Partial'],
-        };
-        const [cls, label] = map[st] || ['b-grey', st || '—'];
-        return `<span class="badge ${cls}">${label}</span>`;
+    if (!tbody) return;
+
+    const badge = st => {
+      const map = {
+        Completed: ['b-green','Paid'], paid: ['b-green','Paid'],
+        Received:  ['b-green','Received'],
+        Pending:   ['b-mango','Pending'], pending: ['b-mango','Pending'],
+        'In Transit': ['b-mango','In Transit'],
+        partial_paid: ['b-mango','Partial'], partial: ['b-mango','Partial'],
       };
+      const [cls, label] = map[st] || ['b-grey', st || '—'];
+      return `<span class="badge ${cls}">${label}</span>`;
+    };
 
-      const saleRows = (sales || []).map(s => ({
-        date:   s.sale_date ? s.sale_date.replace('T',' ').slice(0,16) : '—',
-        ref:    `<span class="mono">${s.id.slice(0,8).toUpperCase()}</span>`,
-        type:   `<span class="badge b-green" style="font-size:10px">Sale</span>`,
-        party:  s.customers?.name || 'Walk-in',
-        amount: parseFloat(s.total_amount) || 0,
-        status: s.payment_status,
-      }));
+    const saleRows = recentSales.map(s => ({
+      date: s.date || '—',
+      ref:  `<span class="mono">${s.id}</span>`,
+      type: `<span class="badge b-green" style="font-size:10px">Sale</span>`,
+      party: s.customer || 'Walk-in',
+      amount: s.total || 0,
+      status: s.status,
+    }));
 
-      const purRows = (purches || []).map(p => ({
-        date:   p.purchase_date ? p.purchase_date.split('T')[0] : '—',
-        ref:    `<span class="mono">PO-${p.id.slice(0,8).toUpperCase()}</span>`,
-        type:   `<span class="badge b-blue" style="font-size:10px">Purchase</span>`,
-        party:  p.suppliers?.name || '—',
-        amount: parseFloat(p.total_amount) || 0,
-        status: p.payment_status,
-      }));
+    const purRows = purchases.map(p => ({
+      date: p.date || '—',
+      ref:  `<span class="mono">${p.id}</span>`,
+      type: `<span class="badge b-blue" style="font-size:10px">Purchase</span>`,
+      party: p.supplier || '—',
+      amount: p.total || 0,
+      status: p.status,
+    }));
 
-      const rows = [...saleRows, ...purRows].sort((a,b) => b.date.localeCompare(a.date));
+    const rows = [...saleRows, ...purRows].sort((a, b) => b.date.localeCompare(a.date));
 
-      if (rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-soft);padding:24px">No transactions found for this period.</td></tr>';
-      } else {
-        tbody.innerHTML = rows.map((r,i) => `
+    tbody.innerHTML = rows.length === 0
+      ? '<tr><td colspan="6" style="text-align:center;color:var(--text-soft);padding:24px">No transactions found.</td></tr>'
+      : rows.map((r, i) => `
           <tr style="animation:fadeUp .3s ease ${i*30}ms both">
             <td style="color:var(--text-soft);font-size:12px">${r.date}</td>
             <td>${r.ref}</td>
             <td>${r.type}</td>
-            <td>${r.party}</td>
+            <td style="font-weight:600">${r.party}</td>
             <td><span class="mono" style="font-weight:700">৳${r.amount.toLocaleString('en-IN',{minimumFractionDigits:2})}</span></td>
-            <td>${statusBadgePSR(r.status)}</td>
+            <td>${badge(r.status)}</td>
           </tr>`).join('');
-      }
-    }
-
   } catch (err) {
-    console.error('Report load error:', err);
+    console.error('Report error:', err);
     const tbody = document.getElementById('psrTbody');
-    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red);padding:24px">Error loading data: ${err.message}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red);padding:24px">Error: ${err.message}</td></tr>`;
   }
 }
 
-/* Helper to update text + color */
+/* ── setText helper ── */
 function setText(id, value, colorize = false) {
   const el = document.getElementById(id);
   if (!el) return;
-
-  el.textContent = "৳ " + value.toLocaleString('en-IN', { minimumFractionDigits: 2 });
-
-  if (colorize) {
-    el.classList.remove('positive', 'negative');
-    el.classList.add(value >= 0 ? 'positive' : 'negative');
-  }
+  el.textContent = '৳ ' + value.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+  if (colorize) { el.classList.remove('positive','negative'); el.classList.add(value >= 0 ? 'positive' : 'negative'); }
 }
+
 
 /* ═══════════════════════════════════════════════════════════
    REAL-TIME SUBSCRIPTIONS  –  auto-refresh tables on change
