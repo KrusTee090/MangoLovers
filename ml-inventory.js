@@ -118,8 +118,6 @@ const pageCfg = {
   returns:    {title:'Returns',    sub:'Sales & purchase returns',   act:null},
   customers:  {title:'Customers',  sub:'5 registered customers',     act:'Add Customer'},
   suppliers:  {title:'Suppliers',  sub:'6 registered suppliers',     act:'Add Supplier'},
-  reports:    {title:'Reports',      sub:'Analytics overview',         act:'Download'},
-  'profit-loss': {title:'Profit / Loss Report', sub:'Business performance summary', act:null},
   analytics:  {title:'Analytics',    sub:'Performance insights',       act:'Export'},
   invoices:   {title:'Invoices',   sub:'All issued invoices',        act:'New Invoice'},
   settings:   {title:'Settings',   sub:'System preferences',         act:null},
@@ -187,10 +185,17 @@ function navigate(page) {
     loadSalesPurchaseReport();
   }
   if (page === 'profit-loss' && typeof loadProfitLossReport === 'function') {
-    // Default to "All Time" on first visit, keep current filter on revisit
     const fromEl = document.getElementById('pl-from');
     if (fromEl && !fromEl.value) plQuickFilter('all');
     else loadProfitLossReport();
+  }
+  if (page === 'stock-report' && typeof loadStockReport === 'function') {
+    const fromEl = document.getElementById('sr-from');
+    if (fromEl && !fromEl.value) srQuickFilter('all');
+    else loadStockReport();
+  }
+  if (page === 'analytics' && typeof loadAnalytics === 'function') {
+    loadAnalytics(_anRange || 'week');
   }
   if (page === 'dashboard' && typeof loadChartData === 'function') {
     loadDashboardStats();
@@ -794,58 +799,6 @@ function renderInvoices(){
   </tr>`).join('');
 }
 
-function renderReports(){
-  // ── Top Trending Products (by total qty sold from recentSales) ──
-  const salesMap = {};
-  recentSales.forEach(s => {
-    (s.lineItems || []).forEach(li => {
-      if (!li.name) return;
-      if (!salesMap[li.name]) salesMap[li.name] = { name: li.name, qty: 0, revenue: 0 };
-      salesMap[li.name].qty     += li.qty     || 0;
-      salesMap[li.name].revenue += li.subtotal || 0;
-    });
-  });
-  const trending = Object.values(salesMap).sort((a,b) => b.qty - a.qty).slice(0, 5);
-  const trendEl = document.getElementById('trendingProdsReport');
-  if (trendEl) {
-    if (!trending.length) {
-      trendEl.innerHTML = '<div style="color:var(--text-faint);font-size:12px;padding:8px">No sales data yet</div>';
-    } else {
-      const mxQ = Math.max(trending[0].qty, 1);
-      trendEl.innerHTML = trending.map((p, i) => {
-        const medals = ['🥇','🥈','🥉','',''];
-        return `<div class="top-row">
-          <div class="top-icon-box" style="font-size:14px;display:flex;align-items:center;justify-content:center">${medals[i]||'#'+(i+1)}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:600;margin-bottom:4px">${p.name}</div>
-            <div class="top-bar"><div class="top-fill" style="width:${(p.qty/mxQ)*100}%"></div></div>
-          </div>
-          <div style="text-align:right;min-width:60px">
-            <div class="top-val" style="font-size:11.5px">৳${p.revenue.toLocaleString('en-IN',{minimumFractionDigits:0})}</div>
-            <div style="font-size:10px;color:var(--text-faint)">${p.qty} sold</div>
-          </div>
-        </div>`;
-      }).join('');
-    }
-  }
-
-  // ── Revenue by Category ──
-  const mxC=Math.max(...categoryData.map(d=>d.value));
-  const revCatEl = document.getElementById('revCatChart');
-  if (revCatEl) revCatEl.innerHTML=categoryData.map(d=>`<div class="bar-col"><div class="bseg" style="height:${Math.round((d.value/mxC)*95)}px;background:${d.color};border-radius:4px 4px 0 0"></div><div class="bar-lbl">${d.name.split(' ')[0]}</div></div>`).join('');
-
-  // ── Top 5 Products by Value ──
-  const top=[...products].sort((a,b)=>(b.stock*b.price)-(a.stock*a.price)).slice(0,5);
-  const topEl = document.getElementById('topProdsReport');
-  if (!topEl) return;
-  if(!top.length){topEl.innerHTML='<div style="color:var(--text-faint);font-size:12px;padding:8px">No products</div>';return;}
-  const mxV=Math.max(top[0].stock*top[0].price, 1);
-  topEl.innerHTML=top.map(p=>`<div class="top-row">
-    <div class="top-icon-box">${svgIcon(p.iconSvg,13)}</div>
-    <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;margin-bottom:4px">${p.name}</div><div class="top-bar"><div class="top-fill" style="width:${((p.stock*p.price)/mxV)*100}%"></div></div></div>
-    <div class="top-val">৳${(p.stock*p.price).toFixed(0)}</div>
-  </div>`).join('');
-}
 
 
 function renderSalesReturns(){
@@ -929,11 +882,10 @@ function renderPurchaseReturns(){
   if(tbc) tbc.textContent = purchaseReturns.length;
 }
 function renderAnalytics(){
-  const mxM=Math.max(...salesData.map(d=>d.sales));
-  document.getElementById('analyticsMonthlySales').innerHTML=salesData.map(d=>`<div class="bar-col"><div class="bseg bs-sales" style="height:${Math.round((d.sales/mxM)*95)}px"></div><div class="bar-lbl">${d.month}</div></div>`).join('');
-  const mxW=Math.max(...weeklyData.map(d=>d.sales));
-  document.getElementById('analyticsWeekly').innerHTML=weeklyData.map(d=>`<div class="bar-col"><div class="bseg bs-profit" style="height:${Math.round((d.sales/mxW)*95)}px"></div><div class="bar-lbl">${d.day}</div></div>`).join('');
+  // Rendering is handled by loadAnalytics() in ml-supabase.js
+  // which fetches live data from the database.
 }
+
 
 /* ── MODAL ── */
 function openModal(){document.getElementById('modalOverlay').classList.add('open');}
@@ -962,7 +914,7 @@ renderRecentSales(); renderStockAlerts();
 renderProducts(); renderCatPills(); renderCategories(); renderSalesTable();
 renderPurchases(); renderCustomers(); renderSuppliers(); renderInvoices();
 renderSalesReturns(); renderPurchaseReturns();
-renderReports(); renderAnalytics();
+renderAnalytics();
 renderFinancialSummary();
 // Show correct buttons for initial dashboard page
 navigate('dashboard');

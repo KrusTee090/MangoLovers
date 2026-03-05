@@ -76,17 +76,18 @@
     </div>
     <div class="nav-group">
       <div class="nav-label">Analytics</div>
-      <div class="nav-item" data-page="reports">
-        <span class="icon nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
-        Reports
-      </div>
+
       <div class="nav-item" data-page="Purchase and Sell Report">
         <span class="icon nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
         Purchase and Sell Report
       </div>
       <div class="nav-item" data-page="profit-loss">
         <span class="icon nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></span>
-        Profit and Loss Report
+        Profit / Loss
+      </div>
+      <div class="nav-item" data-page="stock-report">
+        <span class="icon nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+        Stock Report
       </div>
       <div class="nav-item" data-page="analytics">
         <span class="icon nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
@@ -560,17 +561,7 @@
     </div>
 
     <!-- ══ REPORTS ══ -->
-    <div class="page-section" id="page-reports">
-      <div class="section-hdr">
-        <div><h2>Reports</h2><p>Analytics &amp; performance overview</p></div>
-        <button class="btn btn-outline"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download</button>
-      </div>
-      <div class="report-grid">
-        <div class="report-card"><h3>Top Trending Products</h3><div id="trendingProdsReport"></div></div>
-        <div class="report-card"><h3>Revenue by Category</h3><div class="bar-chart" id="revCatChart" style="height:110px"></div></div>
-        <div class="report-card" style="grid-column:span 2"><h3>Top 5 Products by Value</h3><div id="topProdsReport"></div></div>
-      </div>
-    </div>
+
     <div class="page-section report-container" id="page-Purchase and Sell Report">
 
       <div class="report-header">
@@ -690,7 +681,7 @@
     <!-- ══ PROFIT / LOSS REPORT ══ -->
     <div class="page-section" id="page-profit-loss">
       <div class="section-hdr">
-        <div><h2>Profit and Loss Report</h2><p id="pl-subtitle">Based on all transactions</p></div>
+        <div><h2>Profit / Loss Report</h2><p id="pl-subtitle">Based on all transactions</p></div>
         <div style="display:flex;gap:8px;align-items:center">
           <div style="display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:0 10px;height:34px">
             <span style="font-size:11.5px;color:var(--text-soft)">From</span>
@@ -784,19 +775,258 @@
       </div>
     </div>
 
+    <!-- ══ STOCK REPORT ══ -->
+    <div class="page-section" id="page-stock-report">
+
+      <!-- header -->
+      <div class="section-hdr" style="margin-bottom:14px">
+        <div>
+          <h2>Stock Report</h2>
+          <p id="sr-subtitle">Item-level stock movement from sales &amp; purchases</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div style="display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:0 10px;height:34px">
+            <span style="font-size:11.5px;color:var(--text-soft)">From</span>
+            <input type="date" id="sr-from" style="border:none;background:transparent;font-size:12px;color:var(--text);outline:none;font-family:inherit">
+            <span style="font-size:11.5px;color:var(--text-soft)">To</span>
+            <input type="date" id="sr-to" style="border:none;background:transparent;font-size:12px;color:var(--text);outline:none;font-family:inherit">
+          </div>
+          <button class="btn btn-primary" onclick="loadStockReport()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Apply
+          </button>
+          <button class="btn btn-outline" onclick="printStockReport()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Print
+          </button>
+        </div>
+      </div>
+
+      <!-- quick filter pills -->
+      <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
+        <span class="pill active" id="sr-pill-all"   onclick="srQuickFilter('all')">All Time</span>
+        <span class="pill" id="sr-pill-today"  onclick="srQuickFilter('today')">Today</span>
+        <span class="pill" id="sr-pill-week"   onclick="srQuickFilter('week')">This Week</span>
+        <span class="pill" id="sr-pill-month"  onclick="srQuickFilter('month')">This Month</span>
+        <span class="pill" id="sr-pill-year"   onclick="srQuickFilter('year')">This Year</span>
+      </div>
+
+      <!-- summary stat strip -->
+      <div class="stat-grid g4" style="margin-bottom:18px">
+        <div class="mini-stat fade-up d1">
+          <div class="mini-stat-icon" style="background:var(--green-bg)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3.51"/></svg>
+          </div>
+          <div><div class="mini-stat-val" id="sr-stat-in" style="color:var(--green)">0</div><div class="mini-stat-lbl">Total Stock In</div></div>
+        </div>
+        <div class="mini-stat fade-up d2">
+          <div class="mini-stat-icon" style="background:var(--red-bg)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+          </div>
+          <div><div class="mini-stat-val" id="sr-stat-out" style="color:var(--red)">0</div><div class="mini-stat-lbl">Total Stock Out</div></div>
+        </div>
+        <div class="mini-stat fade-up d3">
+          <div class="mini-stat-icon" style="background:var(--blue-bg)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          </div>
+          <div><div class="mini-stat-val" id="sr-stat-items" style="color:var(--blue)">0</div><div class="mini-stat-lbl">Items Tracked</div></div>
+        </div>
+        <div class="mini-stat fade-up d4">
+          <div class="mini-stat-icon" style="background:var(--mango-bg)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--mango)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <div><div class="mini-stat-val" id="sr-stat-val" style="color:var(--mango-dk);font-size:16px">৳0</div><div class="mini-stat-lbl">Stock Value (Cost)</div></div>
+        </div>
+      </div>
+
+      <!-- search + filter bar -->
+      <div class="filter-bar" style="margin-bottom:12px">
+        <div class="fsearch" style="max-width:280px">
+          <span class="icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+          <input id="sr-search" placeholder="Search item name or ID…" oninput="filterStockTable()">
+        </div>
+        <div class="pill-bar">
+          <div class="pill active" id="sr-f-all"  onclick="setSrFilter('all')">All Items</div>
+          <div class="pill" id="sr-f-in"   onclick="setSrFilter('in')">Stock In Only</div>
+          <div class="pill" id="sr-f-out"  onclick="setSrFilter('out')">Stock Out Only</div>
+          <div class="pill" id="sr-f-low"  onclick="setSrFilter('low')">Low / Zero Stock</div>
+        </div>
+      </div>
+
+      <!-- main table -->
+      <div class="card">
+        <div class="tbl-wrap">
+          <table id="sr-table">
+            <thead>
+              <tr>
+                <th>Item ID</th>
+                <th>Item Name</th>
+                <th>Unit</th>
+                <th style="text-align:center">
+                  <span style="color:var(--green)">▲ Stock In</span>
+                  <span style="color:var(--text-faint);font-weight:400;margin-left:4px">(purchases)</span>
+                </th>
+                <th style="text-align:center">
+                  <span style="color:var(--red)">▼ Stock Out</span>
+                  <span style="color:var(--text-faint);font-weight:400;margin-left:4px">(sales)</span>
+                </th>
+                <th style="text-align:center">
+                  <span style="color:var(--blue)">↩ Returns</span>
+                  <span style="color:var(--text-faint);font-weight:400;margin-left:4px">(net)</span>
+                </th>
+                <th style="text-align:center">Net Movement</th>
+                <th style="text-align:right">Current Stock</th>
+                <th style="text-align:right">Stock Value</th>
+              </tr>
+            </thead>
+            <tbody id="sr-tbody">
+              <tr><td colspan="9" style="text-align:center;color:var(--text-faint);padding:40px">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--border);display:block;margin:0 auto 10px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                Loading stock data…
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination" id="sr-pagination" style="display:none">
+          <span class="pagination-info" id="sr-page-info"></span>
+          <div class="page-btns" id="sr-page-btns"></div>
+        </div>
+      </div>
+
+    </div>
+
     <!-- ══ ANALYTICS ══ -->
     <div class="page-section" id="page-analytics">
-      <div class="section-hdr"><div><h2>Analytics</h2><p>Deep performance insights</p></div></div>
-      <div class="stat-grid g4">
-        <div class="stat-card fade-up d1"><div class="stat-card-top"><p class="stat-lbl">Gross Profit Margin</p><div class="stat-icon-box" style="background:var(--green-bg)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div></div><div class="stat-val" style="color:var(--mint)">38.2%</div><div class="stat-foot"><span class="cpill cup"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>2.1%</span><span class="stat-sub">vs last month</span></div></div>
-        <div class="stat-card fade-up d2"><div class="stat-card-top"><p class="stat-lbl">Inventory Turnover</p><div class="stat-icon-box" style="background:var(--blue-bg)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></div></div><div class="stat-val" style="color:var(--blue)">4.8x</div><div class="stat-foot"><span class="cpill cup"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>0.3x</span><span class="stat-sub">per year</span></div></div>
-        <div class="stat-card fade-up d3"><div class="stat-card-top"><p class="stat-lbl">Avg Order Value</p><div class="stat-icon-box" style="background:var(--mango-bg)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--mango)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div></div><div class="stat-val" style="color:var(--mango-dk)">৳522</div><div class="stat-foot"><span class="cpill cup"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>8.4%</span><span class="stat-sub">vs last month</span></div></div>
-        <div class="stat-card fade-up d4"><div class="stat-card-top"><p class="stat-lbl">Customer Retention</p><div class="stat-icon-box" style="background:#f3f0fd"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div></div><div class="stat-val" style="color:var(--purple)">76%</div><div class="stat-foot"><span class="cpill cup"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>4.2%</span><span class="stat-sub">repeat buyers</span></div></div>
+      <div class="section-hdr">
+        <div><h2>Analytics</h2><p id="an-subtitle">Performance insights from your data</p></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div id="an-loading" style="display:none;font-size:12px;color:var(--text-faint);display:flex;align-items:center;gap:6px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
+            Loading…
+          </div>
+          <button class="btn btn-outline" onclick="exportAnalyticsCSV()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export
+          </button>
+        </div>
       </div>
-      <div class="report-grid" style="margin-top:14px">
-        <div class="report-card"><h3>Monthly Sales Trend</h3><div class="bar-chart" id="analyticsMonthlySales" style="height:110px"></div></div>
-        <div class="report-card"><h3>Weekly Activity</h3><div class="bar-chart" id="analyticsWeekly" style="height:110px"></div></div>
+
+      <!-- Date range pills -->
+      <div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap">
+        <span class="pill active" id="an-pill-week"  onclick="loadAnalytics('week')">This Week</span>
+        <span class="pill"        id="an-pill-month" onclick="loadAnalytics('month')">This Month</span>
+        <span class="pill"        id="an-pill-year"  onclick="loadAnalytics('year')">This Year</span>
+        <span class="pill"        id="an-pill-all"   onclick="loadAnalytics('all')">All Time</span>
       </div>
+
+      <!-- KPI cards row -->
+      <div class="stat-grid g4" style="margin-bottom:18px">
+        <div class="stat-card fade-up d1">
+          <div class="stat-card-top"><p class="stat-lbl">Total Revenue</p>
+            <div class="stat-icon-box" style="background:var(--green-bg)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            </div>
+          </div>
+          <div class="stat-val" style="color:var(--mint)" id="an-kpi-revenue">৳—</div>
+          <div class="stat-foot"><span id="an-kpi-sales-count" style="font-size:11.5px;color:var(--text-faint)">— sales</span></div>
+        </div>
+        <div class="stat-card fade-up d2">
+          <div class="stat-card-top"><p class="stat-lbl">Total Purchases</p>
+            <div class="stat-icon-box" style="background:var(--red-bg)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+            </div>
+          </div>
+          <div class="stat-val" style="color:var(--red)" id="an-kpi-purchases">৳—</div>
+          <div class="stat-foot"><span id="an-kpi-po-count" style="font-size:11.5px;color:var(--text-faint)">— orders</span></div>
+        </div>
+        <div class="stat-card fade-up d3">
+          <div class="stat-card-top"><p class="stat-lbl">Net Profit</p>
+            <div class="stat-icon-box" style="background:var(--blue-bg)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
+          </div>
+          <div class="stat-val" id="an-kpi-profit">৳—</div>
+          <div class="stat-foot"><span id="an-kpi-margin" style="font-size:11.5px;color:var(--text-faint)">—% margin</span></div>
+        </div>
+        <div class="stat-card fade-up d4">
+          <div class="stat-card-top"><p class="stat-lbl">Avg Order Value</p>
+            <div class="stat-icon-box" style="background:var(--mango-bg)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--mango)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+            </div>
+          </div>
+          <div class="stat-val" style="color:var(--mango-dk)" id="an-kpi-aov">৳—</div>
+          <div class="stat-foot"><span id="an-kpi-items-sold" style="font-size:11.5px;color:var(--text-faint)">— items sold</span></div>
+        </div>
+      </div>
+
+      <!-- Revenue vs Purchases trend chart -->
+      <div class="card" style="margin-bottom:18px;padding:18px 22px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div style="font-size:13px;font-weight:700">Revenue vs Purchases Trend</div>
+          <div style="display:flex;gap:14px;font-size:11.5px;color:var(--text-soft)">
+            <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--green);display:inline-block"></span>Revenue</span>
+            <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--red);opacity:.65;display:inline-block"></span>Purchases</span>
+          </div>
+        </div>
+        <div id="an-trend-chart" style="display:flex;align-items:flex-end;justify-content:space-around;height:120px;gap:6px;padding-bottom:22px;position:relative">
+          <div style="position:absolute;bottom:20px;left:0;right:0;height:1px;background:var(--border);opacity:.5"></div>
+          <div style="color:var(--text-faint);font-size:12px;margin:auto">Loading chart…</div>
+        </div>
+      </div>
+
+      <!-- Two column: Top Products + Payment Breakdown -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px">
+
+        <!-- Top 5 Selling Products -->
+        <div class="card" style="padding:18px 22px">
+          <div style="font-size:13px;font-weight:700;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+            Top 5 Products
+            <span style="font-size:11px;color:var(--text-faint);font-weight:400">by revenue</span>
+          </div>
+          <div id="an-top-products">
+            <div style="color:var(--text-faint);font-size:12px;text-align:center;padding:16px">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Payment Method Breakdown -->
+        <div class="card" style="padding:18px 22px">
+          <div style="font-size:13px;font-weight:700;margin-bottom:14px">Payment Breakdown</div>
+          <div id="an-payment-breakdown">
+            <div style="color:var(--text-faint);font-size:12px;text-align:center;padding:16px">Loading…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Two column: Top Suppliers + Sales by Weekday -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px">
+
+        <!-- Top Suppliers -->
+        <div class="card" style="padding:18px 22px">
+          <div style="font-size:13px;font-weight:700;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+            Top Suppliers
+            <span style="font-size:11px;color:var(--text-faint);font-weight:400">by spend</span>
+          </div>
+          <div id="an-top-suppliers">
+            <div style="color:var(--text-faint);font-size:12px;text-align:center;padding:16px">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Sales by Day of Week -->
+        <div class="card" style="padding:18px 22px">
+          <div style="font-size:13px;font-weight:700;margin-bottom:14px">Sales by Day of Week</div>
+          <div id="an-weekday-chart" style="display:flex;align-items:flex-end;justify-content:space-around;height:100px;gap:4px;padding-bottom:20px">
+            <div style="color:var(--text-faint);font-size:12px;margin:auto">Loading…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Customer insights row -->
+      <div class="card" style="padding:18px 22px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:14px">Customer Insights</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px" id="an-customer-insights">
+          <div style="color:var(--text-faint);font-size:12px">Loading…</div>
+        </div>
+      </div>
+
     </div>
 
     <!-- ══ INVOICES ══ -->

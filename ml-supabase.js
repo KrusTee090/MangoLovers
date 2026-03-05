@@ -458,7 +458,7 @@ async function loadPurchases() {
     const { data, error } = await db
         .from('supplier_purchases')
         .select(`
-          id, total_amount, purchase_date, payment_status, paid_amount,
+          id, total_amount, purchase_date, payment_status, paid_amount,unit_cost,
           quantity, item_id,
           suppliers(name),
           items!item_id(id, name, uom)
@@ -561,12 +561,14 @@ async function savePurchaseToDB(formData) {
       : null;
 
     /* 3. Insert purchase row (no separate line-items table needed) */
+/* 3. Insert purchase row (no separate line-items table needed) */
     const { data: poRows, error: poErr } = await db
       .from('supplier_purchases')
       .insert([{
         supplier_id:    supplierId,
         item_id:        firstItem?.itemId || null,
         quantity:       firstItem?.qty    || null,
+        unit_cost:      firstItem?.unitPrice || null, // ✨ ADD THIS LINE
         total_amount:   parseFloat(formData.total) || 0,
         payment_status: formData.paymentStatus || 'pending',
         purchase_date:  new Date().toISOString(),
@@ -804,7 +806,7 @@ async function loadPurchaseReturns() {
     const { data, error } = await db
       .from('supplier_purchases')
       .select(`
-        id, total_amount, purchase_date, payment_status,
+        id, total_amount, purchase_date, payment_status,unit_cost,
         suppliers(name),
         items!item_id(id, name, uom),
         quantity
@@ -1273,6 +1275,765 @@ function printProfitLoss() {
     </div>
   </div>
   <div class="footer">MangoLovers Inventory System · Profit / Loss Report · ${new Date().toLocaleDateString()}</div>
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 400);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ANALYTICS PAGE  –  fully DB-connected
+   ═══════════════════════════════════════════════════════════ */
+
+let _anRange = 'week';
+let _anExportData = {};
+
+function _anDateRange(range) {
+  const now  = new Date();
+  const ymd  = d => d.toISOString().split('T')[0];
+  let from, to = ymd(now);
+  if (range === 'week') {
+    const w = new Date(now); w.setDate(w.getDate() - 6);
+    from = ymd(w);
+  } else if (range === 'month') {
+    from = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+  } else if (range === 'year') {
+    from = `${now.getFullYear()}-01-01`;
+  } else {
+    from = null; to = null;
+  }
+  return { from, to };
+}
+
+async function loadAnalytics(range = 'week') {
+  _anRange = range;
+
+  // Update pills
+  ['week','month','year','all'].forEach(k => {
+    const el = document.getElementById(`an-pill-${k}`);
+    if (el) el.classList.toggle('active', k === range);
+  });
+
+  const { from, to } = _anDateRange(range);
+  const rangeLabel = { week:'This Week', month:'This Month', year:'This Year', all:'All Time' }[range];
+  const sub = document.getElementById('an-subtitle');
+  if (sub) sub.textContent = `Showing data for: ${rangeLabel}`;
+
+  // Show loading spinner
+  const loadingEl = document.getElementById('an-loading');
+  if (loadingEl) loadingEl.style.display = 'flex';
+
+  try {
+    // Build date filters
+    let salesFilter   = db.from('sales').select('id, payment_type, payment_status, sale_items!sale_items_sale_id_fkey(quantity, subtotal, item_id, items(name))').neq('payment_status','returned');
+    let purchFilter   = db.from('supplier_purchases').select('id, total_amount, purchase_date, supplier_id, suppliers(name)').neq('payment_status','returned');
+    let salesDateFilt = db.from('sales').select('id, sale_date, payment_type, payment_status, sale_items!sale_items_sale_id_fkey(quantity, subtotal, item_id, items(name))').neq('payment_status','returned');
+    let custFilter    = db.from('sales').select('customer_id, payment_status').neq('payment_status','returned');
+
+    if (from) {
+      salesFilter    = salesFilter.gte('sale_date', `${from}T00:00:00`);
+      purchFilter    = purchFilter.gte('purchase_date', `${from}T00:00:00`);
+      salesDateFilt  = salesDateFilt.gte('sale_date', `${from}T00:00:00`);
+      custFilter     = custFilter.gte('sale_date', `${from}T00:00:00`);
+    }
+    if (to) {
+      salesFilter    = salesFilter.lte('sale_date', `${to}T23:59:59`);
+      purchFilter    = purchFilter.lte('purchase_date', `${to}T23:59:59`);
+      salesDateFilt  = salesDateFilt.lte('sale_date', `${to}T23:59:59`);
+      custFilter     = custFilter.lte('sale_date', `${to}T23:59:59`);
+    }
+
+    const [
+      { data: salesRows },
+      { data: purchRows },
+      { data: salesDateRows },
+      { data: custRows },
+    ] = await Promise.all([
+      salesFilter,
+      purchFilter,
+      salesDateFilt,
+      custFilter,
+    ]);
+
+    // ── KPI calculations ──
+    let totalRevenue = 0, totalItems = 0;
+    (salesRows || []).forEach(s => {
+      (s.sale_items || []).forEach(si => {
+        totalRevenue += parseFloat(si.subtotal || 0);
+        totalItems   += parseInt(si.quantity  || 0);
+      });
+    });
+    const totalPurchases = (purchRows || []).reduce((sum, p) => sum + parseFloat(p.total_amount || 0), 0);
+    const netProfit      = totalRevenue - totalPurchases;
+    const salesCount     = (salesRows || []).length;
+    const aov            = salesCount > 0 ? totalRevenue / salesCount : 0;
+    const margin         = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+
+    // Update KPI cards
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('an-kpi-revenue',     '৳' + totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 0 }));
+    set('an-kpi-purchases',   '৳' + totalPurchases.toLocaleString('en-IN', { minimumFractionDigits: 0 }));
+    set('an-kpi-profit',      '৳' + netProfit.toLocaleString('en-IN', { minimumFractionDigits: 0 }));
+    set('an-kpi-aov',         '৳' + aov.toLocaleString('en-IN', { minimumFractionDigits: 0 }));
+    set('an-kpi-sales-count', salesCount + ' sales');
+    set('an-kpi-po-count',    (purchRows||[]).length + ' orders');
+    set('an-kpi-items-sold',  totalItems + ' items sold');
+
+    const profitEl = document.getElementById('an-kpi-profit');
+    if (profitEl) profitEl.style.color = netProfit >= 0 ? 'var(--green)' : 'var(--red)';
+    set('an-kpi-margin', margin.toFixed(1) + '% margin');
+    const marginEl = document.getElementById('an-kpi-margin');
+    if (marginEl) marginEl.style.color = margin >= 0 ? 'var(--text-faint)' : 'var(--red)';
+
+    // ── Revenue vs Purchases Trend chart ──
+    _anRenderTrendChart(salesDateRows || [], purchRows || [], range);
+
+    // ── Top 5 Products ──
+    const prodMap = {};
+    (salesRows || []).forEach(s => {
+      (s.sale_items || []).forEach(si => {
+        const name = si.items?.name || si.item_id || 'Unknown';
+        if (!prodMap[name]) prodMap[name] = { name, revenue: 0, qty: 0 };
+        prodMap[name].revenue += parseFloat(si.subtotal || 0);
+        prodMap[name].qty     += parseInt(si.quantity  || 0);
+      });
+    });
+    const topProds = Object.values(prodMap).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+    _anRenderTopProducts(topProds);
+
+    // ── Payment Breakdown ──
+    const payMap = {};
+    (salesRows || []).forEach(s => {
+      const key = s.payment_type || 'other';
+      if (!payMap[key]) payMap[key] = { label: key, count: 0, revenue: 0 };
+      payMap[key].count++;
+      payMap[key].revenue += (s.sale_items || []).reduce((a, si) => a + parseFloat(si.subtotal || 0), 0);
+    });
+    _anRenderPaymentBreakdown(Object.values(payMap));
+
+    // ── Top Suppliers ──
+    const suppMap = {};
+    (purchRows || []).forEach(p => {
+      const name = p.suppliers?.name || p.supplier_id || 'Unknown';
+      if (!suppMap[name]) suppMap[name] = { name, total: 0, count: 0 };
+      suppMap[name].total += parseFloat(p.total_amount || 0);
+      suppMap[name].count++;
+    });
+    const topSupps = Object.values(suppMap).sort((a, b) => b.total - a.total).slice(0, 5);
+    _anRenderTopSuppliers(topSupps);
+
+    // ── Sales by Weekday ──
+    const dayMap = { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0 };
+    (salesDateRows || []).forEach(s => {
+      const d = new Date(s.sale_date).getDay();
+      dayMap[d] += (s.sale_items || []).reduce((a, si) => a + parseFloat(si.subtotal || 0), 0);
+    });
+    _anRenderWeekdayChart(dayMap);
+
+    // ── Customer Insights ──
+    const uniqueCusts     = new Set((custRows || []).map(r => r.customer_id).filter(Boolean));
+    const walkInCount     = (custRows || []).filter(r => !r.customer_id).length;
+    const repeatMap       = {};
+    (custRows || []).forEach(r => { if (r.customer_id) { repeatMap[r.customer_id] = (repeatMap[r.customer_id]||0)+1; } });
+    const repeatCusts     = Object.values(repeatMap).filter(v => v > 1).length;
+    const repeatRate      = uniqueCusts.size > 0 ? ((repeatCusts / uniqueCusts.size) * 100).toFixed(0) : 0;
+    _anRenderCustomerInsights({ uniqueCusts: uniqueCusts.size, walkIn: walkInCount, repeatRate, totalSales: salesCount });
+
+    // Save export data
+    _anExportData = { topProds, topSupps, totalRevenue, totalPurchases, netProfit, salesCount, margin };
+
+  } catch (err) {
+    console.error('Analytics load error:', err);
+  } finally {
+    if (loadingEl) loadingEl.style.display = 'none';
+  }
+}
+
+function _anRenderTrendChart(salesRows, purchRows, range) {
+  const el = document.getElementById('an-trend-chart');
+  if (!el) return;
+
+  // Build buckets based on range
+  const buckets = {};
+  const now = new Date();
+
+  if (range === 'week') {
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now); d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      buckets[key] = { label: days[d.getDay()], rev: 0, pur: 0 };
+    }
+    salesRows.forEach(s => {
+      const key = s.sale_date?.split('T')[0];
+      if (buckets[key]) buckets[key].rev += (s.sale_items||[]).reduce((a,si)=>a+parseFloat(si.subtotal||0),0);
+    });
+    purchRows.forEach(p => {
+      const key = p.purchase_date?.split('T')[0];
+      if (buckets[key]) buckets[key].pur += parseFloat(p.total_amount||0);
+    });
+  } else if (range === 'month') {
+    const year = now.getFullYear(), month = now.getMonth();
+    const days = new Date(year, month+1, 0).getDate();
+    for (let d = 1; d <= days; d++) {
+      const key = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      buckets[key] = { label: d % 5 === 0 || d === 1 ? String(d) : '', rev: 0, pur: 0 };
+    }
+    salesRows.forEach(s => {
+      const key = s.sale_date?.split('T')[0];
+      if (buckets[key]) buckets[key].rev += (s.sale_items||[]).reduce((a,si)=>a+parseFloat(si.subtotal||0),0);
+    });
+    purchRows.forEach(p => {
+      const key = p.purchase_date?.split('T')[0];
+      if (buckets[key]) buckets[key].pur += parseFloat(p.total_amount||0);
+    });
+  } else {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const year = range === 'year' ? now.getFullYear() : null;
+    months.forEach((m, i) => {
+      const key = year ? `${year}-${String(i+1).padStart(2,'0')}` : m;
+      buckets[key] = { label: m, rev: 0, pur: 0 };
+    });
+    salesRows.forEach(s => {
+      if (!s.sale_date) return;
+      const d = new Date(s.sale_date);
+      const key = range === 'year'
+        ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+        : months[d.getMonth()];
+      if (buckets[key]) buckets[key].rev += (s.sale_items||[]).reduce((a,si)=>a+parseFloat(si.subtotal||0),0);
+    });
+    purchRows.forEach(p => {
+      if (!p.purchase_date) return;
+      const d = new Date(p.purchase_date);
+      const key = range === 'year'
+        ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+        : months[d.getMonth()];
+      if (buckets[key]) buckets[key].pur += parseFloat(p.total_amount||0);
+    });
+  }
+
+  const vals = Object.values(buckets);
+  const maxVal = Math.max(...vals.map(v => Math.max(v.rev, v.pur)), 1);
+
+  el.innerHTML = vals.map(v => `
+    <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:2px;min-width:0">
+      <div style="display:flex;align-items:flex-end;gap:2px;height:100px;width:100%">
+        <div title="Revenue ৳${v.rev.toLocaleString('en-IN',{minimumFractionDigits:0})}"
+          style="flex:1;background:var(--green);border-radius:3px 3px 0 0;min-height:2px;height:${Math.max(2,(v.rev/maxVal)*96)}px;opacity:.85;cursor:pointer;transition:opacity .15s"
+          onmouseover="this.style.opacity=1" onmouseout="this.style.opacity='.85'"></div>
+        <div title="Purchases ৳${v.pur.toLocaleString('en-IN',{minimumFractionDigits:0})}"
+          style="flex:1;background:var(--red);border-radius:3px 3px 0 0;min-height:2px;height:${Math.max(2,(v.pur/maxVal)*96)}px;opacity:.55;cursor:pointer;transition:opacity .15s"
+          onmouseover="this.style.opacity=.85" onmouseout="this.style.opacity='.55'"></div>
+      </div>
+      <div style="font-size:9.5px;color:var(--text-faint);white-space:nowrap;overflow:hidden;max-width:100%;text-overflow:ellipsis">${v.label}</div>
+    </div>`).join('');
+}
+
+function _anRenderTopProducts(prods) {
+  const el = document.getElementById('an-top-products');
+  if (!el) return;
+  if (!prods.length) { el.innerHTML = '<div style="color:var(--text-faint);font-size:12px;text-align:center;padding:16px">No sales data yet</div>'; return; }
+  const maxRev = prods[0].revenue || 1;
+  const medals = ['🥇','🥈','🥉','',''];
+  el.innerHTML = prods.map((p, i) => `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <div style="font-size:15px;width:20px;text-align:center;flex-shrink:0">${medals[i] || '<span style="font-size:11px;color:var(--text-faint)">#'+(i+1)+'</span>'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+        <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+          <div style="height:100%;background:var(--mint);border-radius:3px;width:${(p.revenue/maxRev)*100}%"></div>
+        </div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;min-width:70px">
+        <div style="font-size:12px;font-weight:700;color:var(--mint)">৳${p.revenue.toLocaleString('en-IN',{minimumFractionDigits:0})}</div>
+        <div style="font-size:10px;color:var(--text-faint)">${p.qty} sold</div>
+      </div>
+    </div>`).join('');
+}
+
+function _anRenderPaymentBreakdown(methods) {
+  const el = document.getElementById('an-payment-breakdown');
+  if (!el) return;
+  if (!methods.length) { el.innerHTML = '<div style="color:var(--text-faint);font-size:12px;text-align:center;padding:16px">No sales data yet</div>'; return; }
+  const total = methods.reduce((s, m) => s + m.revenue, 0) || 1;
+  const colors = { cash:'var(--green)', bkash:'var(--purple)', nagad:'var(--mango-dk)', card:'var(--blue)', other:'var(--text-soft)' };
+  const icons  = { cash:'💵', bkash:'📱', nagad:'🔶', card:'💳', other:'💰' };
+  const sorted = [...methods].sort((a, b) => b.revenue - a.revenue);
+  el.innerHTML = sorted.map(m => {
+    const pct = ((m.revenue / total) * 100).toFixed(1);
+    const color = colors[m.label] || colors.other;
+    return `
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:12px;font-weight:600;text-transform:capitalize">${icons[m.label]||'💰'} ${m.label}</span>
+          <span style="font-size:11.5px;color:${color};font-weight:700">${pct}% · ৳${m.revenue.toLocaleString('en-IN',{minimumFractionDigits:0})}</span>
+        </div>
+        <div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden">
+          <div style="height:100%;background:${color};border-radius:4px;width:${pct}%;transition:width .4s ease;opacity:.85"></div>
+        </div>
+        <div style="font-size:10px;color:var(--text-faint);margin-top:2px">${m.count} transactions</div>
+      </div>`;
+  }).join('');
+}
+
+function _anRenderTopSuppliers(supps) {
+  const el = document.getElementById('an-top-suppliers');
+  if (!el) return;
+  if (!supps.length) { el.innerHTML = '<div style="color:var(--text-faint);font-size:12px;text-align:center;padding:16px">No purchase data yet</div>'; return; }
+  const maxTotal = supps[0].total || 1;
+  el.innerHTML = supps.map((s, i) => `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <div style="width:24px;height:24px;border-radius:6px;background:var(--mango-bg);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:var(--mango-dk);flex-shrink:0">${i+1}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div>
+        <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+          <div style="height:100%;background:var(--mango);border-radius:3px;width:${(s.total/maxTotal)*100}%;opacity:.75"></div>
+        </div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;min-width:70px">
+        <div style="font-size:12px;font-weight:700;color:var(--mango-dk)">৳${s.total.toLocaleString('en-IN',{minimumFractionDigits:0})}</div>
+        <div style="font-size:10px;color:var(--text-faint)">${s.count} order${s.count!==1?'s':''}</div>
+      </div>
+    </div>`).join('');
+}
+
+function _anRenderWeekdayChart(dayMap) {
+  const el = document.getElementById('an-weekday-chart');
+  if (!el) return;
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const vals = [0,1,2,3,4,5,6].map(i => ({ day: days[i], val: dayMap[i] || 0 }));
+  const maxVal = Math.max(...vals.map(v => v.val), 1);
+  el.innerHTML = vals.map(v => `
+    <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:4px">
+      <div style="font-size:9.5px;color:var(--text-faint);font-weight:600;height:16px;display:flex;align-items:center">
+        ${v.val > 0 ? '৳'+Math.round(v.val/1000)+'k' : ''}
+      </div>
+      <div title="${v.day}: ৳${v.val.toLocaleString('en-IN',{minimumFractionDigits:0})}"
+        style="width:100%;background:${v.val>0?'var(--blue)':'var(--border)'};border-radius:4px 4px 0 0;
+               min-height:4px;height:${Math.max(4,(v.val/maxVal)*72)}px;opacity:${v.val>0?.8:.3};
+               cursor:${v.val>0?'pointer':'default'};transition:opacity .15s"
+        onmouseover="this.style.opacity=1" onmouseout="this.style.opacity='${v.val>0?.8:.3}'"></div>
+      <div style="font-size:9.5px;color:var(--text-faint)">${v.day}</div>
+    </div>`).join('');
+}
+
+function _anRenderCustomerInsights({ uniqueCusts, walkIn, repeatRate, totalSales }) {
+  const el = document.getElementById('an-customer-insights');
+  if (!el) return;
+  const items = [
+    { label:'Registered Customers',  val: uniqueCusts,              color:'var(--blue)',     icon:'👤' },
+    { label:'Walk-in Sales',          val: walkIn,                   color:'var(--text-soft)', icon:'🚶' },
+    { label:'Repeat Customer Rate',   val: repeatRate + '%',         color:'var(--green)',    icon:'🔁' },
+    { label:'Total Transactions',     val: totalSales,               color:'var(--mint)',     icon:'🧾' },
+  ];
+  el.innerHTML = items.map(item => `
+    <div style="text-align:center;padding:12px 8px;background:var(--bg);border-radius:10px;border:1px solid var(--border)">
+      <div style="font-size:22px;margin-bottom:6px">${item.icon}</div>
+      <div style="font-size:20px;font-weight:800;color:${item.color};font-family:monospace">${item.val}</div>
+      <div style="font-size:11px;color:var(--text-faint);margin-top:3px">${item.label}</div>
+    </div>`).join('');
+}
+
+function exportAnalyticsCSV() {
+  const d = _anExportData;
+  if (!d.topProds) { toast('No analytics data loaded yet', 'warning'); return; }
+  const rows = [
+    ['Metric','Value'],
+    ['Total Revenue', d.totalRevenue],
+    ['Total Purchases', d.totalPurchases],
+    ['Net Profit', d.netProfit],
+    ['Profit Margin %', d.margin.toFixed(1)],
+    ['Total Sales', d.salesCount],
+    ['',''],
+    ['Top Product','Revenue (৳)','Qty Sold'],
+    ...(d.topProds||[]).map(p => [p.name, p.revenue, p.qty]),
+    ['',''],
+    ['Top Supplier','Total Spend (৳)','Orders'],
+    ...(d.topSupps||[]).map(s => [s.name, s.total, s.count]),
+  ];
+  exportCSV(rows.slice(1), `analytics_${_anRange}.csv`, [
+    { label:'Metric/Name', key:'0' },
+    { label:'Value/Revenue', key:'1' },
+    { label:'Extra', key:'2' },
+  ].map((c,i) => ({ label: rows[0][i]||'', key: i })));
+  // Simple raw CSV export
+  const csv = rows.map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a'); a.href=url; a.download=`analytics_${_anRange}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  toast(`Exported analytics_${_anRange}.csv`);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STOCK REPORT
+   ═══════════════════════════════════════════════════════════ */
+
+let _srData       = [];   // full dataset after load
+let _srFiltered   = [];   // after search/type filter
+let _srFilter     = 'all';
+let _srPage       = 1;
+const SR_PAGE_SIZE = 25;
+
+function srQuickFilter(range) {
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  let from, to;
+
+  if (range === 'all')        { from = null; to = null; }
+  else if (range === 'today') { from = to = ymd(now); }
+  else if (range === 'week')  {
+    const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay()+6)%7));
+    from = ymd(mon); to = ymd(now);
+  }
+  else if (range === 'month') { from = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`; to = ymd(now); }
+  else if (range === 'year')  { from = `${now.getFullYear()}-01-01`; to = ymd(now); }
+
+  ['all','today','week','month','year'].forEach(k => {
+    const el = document.getElementById(`sr-pill-${k}`);
+    if (el) el.classList.toggle('active', k === range);
+  });
+
+  const fromEl = document.getElementById('sr-from');
+  const toEl   = document.getElementById('sr-to');
+  if (fromEl) fromEl.value = from || '';
+  if (toEl)   toEl.value   = to   || '';
+
+  loadStockReport();
+}
+
+function setSrFilter(type) {
+  _srFilter = type;
+  ['all','in','out','low'].forEach(k => {
+    const el = document.getElementById(`sr-f-${k}`);
+    if (el) el.classList.toggle('active', k === type);
+  });
+  _srPage = 1;
+  _applyStockFilter();
+}
+
+function filterStockTable() {
+  _srPage = 1;
+  _applyStockFilter();
+}
+
+function _applyStockFilter() {
+  const q = (document.getElementById('sr-search')?.value || '').toLowerCase();
+  _srFiltered = _srData.filter(row => {
+    const matchSearch = !q || row.name.toLowerCase().includes(q) || row.itemId.toLowerCase().includes(q);
+    const matchType =
+      _srFilter === 'all' ? true :
+      _srFilter === 'in'  ? row.stockIn > 0 :
+      _srFilter === 'out' ? row.stockOut > 0 :
+      _srFilter === 'low' ? row.currentStock <= 10 : true;
+    return matchSearch && matchType;
+  });
+  _renderStockTable();
+}
+
+async function loadStockReport() {
+  const fromEl = document.getElementById('sr-from');
+  const toEl   = document.getElementById('sr-to');
+  const from   = fromEl?.value || null;
+  const to     = toEl?.value   || null;
+
+  const sub = document.getElementById('sr-subtitle');
+  if (sub) sub.textContent = (from && to) ? `Stock movement · ${from} → ${to}` : 'All stock movement from sales & purchases';
+
+  // Show loading state
+  const tbody = document.getElementById('sr-tbody');
+  if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text-faint);padding:40px 0">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--border);display:block;margin:0 auto 10px;animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+    Loading…</td></tr>`;
+
+  if (!document.getElementById('srSpinStyle')) {
+    const st = document.createElement('style');
+    st.id = 'srSpinStyle';
+    st.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(st);
+  }
+
+  try {
+    /* ── 1. All current items ── */
+    const { data: items } = await db.from('items')
+      .select('id, name, uom, cost_price, selling_price, stock_quantity')
+      .order('id');
+
+    /* ── 2. Sales items in range (non-returned sales) ── */
+    let saleQ = db.from('sale_items')
+      .select('item_id, quantity, unit_price, subtotal, sales!inner(sale_date, payment_status)')
+      .neq('sales.payment_status', 'returned');
+    if (from) saleQ = saleQ.gte('sales.sale_date', `${from}T00:00:00`);
+    if (to)   saleQ = saleQ.lte('sales.sale_date', `${to}T23:59:59`);
+    const { data: saleItems } = await saleQ;
+
+    /* ── 3. Sale returns (returned sales) in range ── */
+    let saleRetQ = db.from('sale_items')
+      .select('item_id, quantity, sales!inner(sale_date, payment_status)')
+      .eq('sales.payment_status', 'returned');
+    if (from) saleRetQ = saleRetQ.gte('sales.sale_date', `${from}T00:00:00`);
+    if (to)   saleRetQ = saleRetQ.lte('sales.sale_date', `${to}T23:59:59`);
+    const { data: saleRetItems } = await saleRetQ;
+
+    /* ── 4. Purchase items in range (non-returned purchases) ── */
+    let purQ = db.from('supplier_purchase_items')
+      .select('item_id, quantity, unit_cost, subtotal, supplier_purchases!inner(purchase_date, payment_status)')
+      .neq('supplier_purchases.payment_status', 'returned');
+    if (from) purQ = purQ.gte('supplier_purchases.purchase_date', `${from}T00:00:00`);
+    if (to)   purQ = purQ.lte('supplier_purchases.purchase_date', `${to}T23:59:59`);
+    const { data: purItems } = await purQ;
+
+    /* ── 5. Purchase returns in range ── */
+    let purRetQ = db.from('supplier_purchase_items')
+      .select('item_id, quantity, supplier_purchases!inner(purchase_date, payment_status)')
+      .eq('supplier_purchases.payment_status', 'returned');
+    if (from) purRetQ = purRetQ.gte('supplier_purchases.purchase_date', `${from}T00:00:00`);
+    if (to)   purRetQ = purRetQ.lte('supplier_purchases.purchase_date', `${to}T23:59:59`);
+    const { data: purRetItems } = await purRetQ;
+
+    /* ── 6. Aggregate by item ── */
+    const agg = {};  // itemId → { stockIn, stockOut, saleReturns, purReturns, inValue, outValue }
+
+    // initialise with all items
+    (items||[]).forEach(it => {
+      agg[it.id] = {
+        itemId:       it.id,
+        name:         it.name || it.id,
+        uom:          it.uom || '—',
+        costPrice:    parseFloat(it.cost_price || 0),
+        sellPrice:    parseFloat(it.selling_price || 0),
+        currentStock: it.stock_quantity || 0,
+        stockIn:      0,
+        stockOut:     0,
+        saleReturns:  0,
+        purReturns:   0,
+        inValue:      0,
+        outValue:     0,
+      };
+    });
+
+    (purItems||[]).forEach(r => {
+      if (!agg[r.item_id]) return;
+      agg[r.item_id].stockIn  += r.quantity || 0;
+      agg[r.item_id].inValue  += parseFloat(r.subtotal || 0);
+    });
+
+    (saleItems||[]).forEach(r => {
+      if (!agg[r.item_id]) return;
+      agg[r.item_id].stockOut += r.quantity || 0;
+      agg[r.item_id].outValue += parseFloat(r.subtotal || 0);
+    });
+
+    (saleRetItems||[]).forEach(r => {
+      if (!agg[r.item_id]) return;
+      agg[r.item_id].saleReturns += r.quantity || 0;
+    });
+
+    (purRetItems||[]).forEach(r => {
+      if (!agg[r.item_id]) return;
+      agg[r.item_id].purReturns += r.quantity || 0;
+    });
+
+    // net returns = sale returns (back to stock) - purchase returns (out of stock)
+    Object.values(agg).forEach(row => {
+      row.netReturns  = row.saleReturns - row.purReturns;
+      row.netMovement = row.stockIn - row.stockOut + row.netReturns;
+      row.stockValue  = row.currentStock * row.costPrice;
+    });
+
+    _srData = Object.values(agg).sort((a,b) => (b.stockIn + b.stockOut) - (a.stockIn + a.stockOut));
+
+    /* ── 7. Update summary stats ── */
+    const totalIn   = _srData.reduce((s,r) => s + r.stockIn, 0);
+    const totalOut  = _srData.reduce((s,r) => s + r.stockOut, 0);
+    const totalVal  = _srData.reduce((s,r) => s + r.stockValue, 0);
+    const activeItems = _srData.filter(r => r.stockIn > 0 || r.stockOut > 0).length;
+
+    const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setEl('sr-stat-in',    totalIn.toLocaleString('en-IN'));
+    setEl('sr-stat-out',   totalOut.toLocaleString('en-IN'));
+    setEl('sr-stat-items', activeItems);
+    setEl('sr-stat-val',   '৳' + totalVal.toLocaleString('en-IN', {minimumFractionDigits:0}));
+
+    /* ── 8. Apply current filter and render ── */
+    _srPage = 1;
+    _applyStockFilter();
+
+  } catch (err) {
+    console.error('Stock report error:', err);
+    const tbody = document.getElementById('sr-tbody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--red);padding:30px">Error: ${err.message}</td></tr>`;
+    if (typeof toast === 'function') toast('Stock report failed: ' + err.message, 'error');
+  }
+}
+
+function _renderStockTable() {
+  const tbody = document.getElementById('sr-tbody');
+  if (!tbody) return;
+
+  const total = _srFiltered.length;
+  const pages = Math.ceil(total / SR_PAGE_SIZE);
+  const start = (_srPage - 1) * SR_PAGE_SIZE;
+  const rows  = _srFiltered.slice(start, start + SR_PAGE_SIZE);
+
+  const fmt  = n => n.toLocaleString('en-IN');
+  const fmtM = n => n.toLocaleString('en-IN', {minimumFractionDigits:2});
+
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text-faint);padding:40px">
+      No items match your filter.</td></tr>`;
+  } else {
+    tbody.innerHTML = rows.map((r, i) => {
+      const net    = r.netMovement;
+      const netCol = net > 0 ? 'var(--green)' : net < 0 ? 'var(--red)' : 'var(--text-soft)';
+      const netPfx = net > 0 ? '+' : '';
+      const stockCol = r.currentStock === 0 ? 'var(--red)'
+                     : r.currentStock <= 10  ? 'var(--mango-dk)'
+                     : 'var(--text)';
+      const stockBadge = r.currentStock === 0
+        ? `<span class="badge b-red" style="font-size:9px;margin-left:4px">Out</span>`
+        : r.currentStock <= 10
+        ? `<span class="badge b-mango" style="font-size:9px;margin-left:4px">Low</span>`
+        : '';
+
+      return `<tr style="animation:fadeUp .25s ease ${i*20}ms both">
+        <td><span class="mono" style="font-size:11px;color:var(--text-faint)">${r.itemId}</span></td>
+        <td>
+          <div style="font-weight:600;font-size:13px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.name}">${r.name}</div>
+        </td>
+        <td><span style="font-size:11px;color:var(--text-soft)">${r.uom}</span></td>
+        <td style="text-align:center">
+          ${r.stockIn > 0
+            ? `<div style="display:inline-flex;align-items:center;gap:4px;background:var(--green-bg);color:var(--green);padding:3px 9px;border-radius:7px;font-weight:700;font-size:12.5px;font-family:'JetBrains Mono',monospace">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3.51"/></svg>
+                +${fmt(r.stockIn)}</div>`
+            : `<span style="color:var(--text-faint);font-size:12px">—</span>`}
+        </td>
+        <td style="text-align:center">
+          ${r.stockOut > 0
+            ? `<div style="display:inline-flex;align-items:center;gap:4px;background:var(--red-bg);color:var(--red);padding:3px 9px;border-radius:7px;font-weight:700;font-size:12.5px;font-family:'JetBrains Mono',monospace">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+                −${fmt(r.stockOut)}</div>`
+            : `<span style="color:var(--text-faint);font-size:12px">—</span>`}
+        </td>
+        <td style="text-align:center">
+          ${r.netReturns !== 0
+            ? `<span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--blue)">${r.netReturns > 0 ? '+' : ''}${fmt(r.netReturns)}</span>`
+            : `<span style="color:var(--text-faint);font-size:12px">—</span>`}
+        </td>
+        <td style="text-align:center">
+          <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:${netCol}">${netPfx}${fmt(net)}</span>
+        </td>
+        <td style="text-align:right">
+          <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:${stockCol}">${fmt(r.currentStock)}</span>${stockBadge}
+        </td>
+        <td style="text-align:right">
+          <span class="mono" style="font-size:12px;color:var(--text-soft)">৳${fmtM(r.stockValue)}</span>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  // pagination
+  const pag     = document.getElementById('sr-pagination');
+  const info    = document.getElementById('sr-page-info');
+  const btnWrap = document.getElementById('sr-page-btns');
+  if (!pag) return;
+
+  if (total <= SR_PAGE_SIZE) {
+    pag.style.display = 'none';
+  } else {
+    pag.style.display = '';
+    if (info) info.textContent = `Showing ${start+1}–${Math.min(start+SR_PAGE_SIZE, total)} of ${total} items`;
+    if (btnWrap) {
+      let html = `<button class="page-btn${_srPage===1?' active':''}" onclick="_srGoPage(1)">1</button>`;
+      if (_srPage > 3) html += `<button class="page-btn" disabled style="cursor:default">…</button>`;
+      for (let p = Math.max(2,_srPage-1); p <= Math.min(pages-1,_srPage+1); p++)
+        html += `<button class="page-btn${p===_srPage?' active':''}" onclick="_srGoPage(${p})">${p}</button>`;
+      if (_srPage < pages-2) html += `<button class="page-btn" disabled style="cursor:default">…</button>`;
+      if (pages > 1)
+        html += `<button class="page-btn${_srPage===pages?' active':''}" onclick="_srGoPage(${pages})">${pages}</button>`;
+      btnWrap.innerHTML = html;
+    }
+  }
+}
+
+function _srGoPage(p) {
+  _srPage = p;
+  _renderStockTable();
+  document.getElementById('page-stock-report')?.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function printStockReport() {
+  const fromEl = document.getElementById('sr-from');
+  const toEl   = document.getElementById('sr-to');
+  const range  = (fromEl?.value && toEl?.value) ? `${fromEl.value} to ${toEl.value}` : 'All Time';
+  const fmt    = n => n.toLocaleString('en-IN');
+  const fmtM   = n => n.toLocaleString('en-IN', {minimumFractionDigits:2});
+
+  const rows = _srFiltered.map((r,i) => {
+    const net    = r.netMovement;
+    const netPfx = net > 0 ? '+' : '';
+    const sc     = r.currentStock === 0 ? 'color:#e55353;font-weight:700' : r.currentStock <= 10 ? 'color:#d4880f;font-weight:700' : '';
+    return `<tr style="background:${i%2===0?'#fff':'#f9fbf9'}">
+      <td>${r.itemId}</td>
+      <td>${r.name}</td>
+      <td style="text-align:center">${r.uom}</td>
+      <td style="text-align:center;color:#3caf82;font-weight:700">${r.stockIn > 0 ? '+'+fmt(r.stockIn) : '—'}</td>
+      <td style="text-align:center;color:#e55353;font-weight:700">${r.stockOut > 0 ? '−'+fmt(r.stockOut) : '—'}</td>
+      <td style="text-align:center;color:#4a85e8">${r.netReturns !== 0 ? (r.netReturns>0?'+':'')+fmt(r.netReturns) : '—'}</td>
+      <td style="text-align:center;font-weight:700;color:${net>0?'#3caf82':net<0?'#e55353':'#7fa393'}">${netPfx}${fmt(net)}</td>
+      <td style="text-align:right;${sc}">${fmt(r.currentStock)}</td>
+      <td style="text-align:right;color:#7fa393">৳${fmtM(r.stockValue)}</td>
+    </tr>`;
+  }).join('');
+
+  const totalIn  = _srFiltered.reduce((s,r)=>s+r.stockIn,0);
+  const totalOut = _srFiltered.reduce((s,r)=>s+r.stockOut,0);
+  const totalVal = _srFiltered.reduce((s,r)=>s+r.stockValue,0);
+
+  const win = window.open('','_blank','width=1000,height=720');
+  win.document.write(`<!DOCTYPE html><html><head>
+  <title>Stock Report</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'DM Sans',Arial,sans-serif;color:#1a2e22;background:#fff;padding:30px;font-size:12px}
+    h1{font-size:20px;font-weight:800;margin-bottom:3px}
+    .sub{color:#6b8a74;font-size:11px;margin-bottom:18px}
+    .summary{display:flex;gap:20px;margin-bottom:20px;padding:14px 18px;background:#f7faf8;border-radius:10px;border:1px solid #e0ede7}
+    .sum-item{flex:1;text-align:center}
+    .sum-val{font-size:18px;font-weight:800;font-family:monospace}
+    .sum-lbl{font-size:10px;color:#7fa393;margin-top:2px;text-transform:uppercase;letter-spacing:.05em}
+    table{width:100%;border-collapse:collapse}
+    th{background:#f7faf8;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#7fa393;padding:8px 10px;text-align:left;border-bottom:2px solid #e0ede7}
+    td{padding:7px 10px;border-bottom:1px solid #f0f6f2;font-size:11.5px}
+    .footer{margin-top:18px;text-align:center;font-size:10px;color:#a8c5b8;border-top:1px solid #e0ede7;padding-top:12px}
+    @media print{body{padding:15px}}
+  </style></head><body>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div>
+      <div style="font-weight:800;font-size:14px;margin-bottom:2px">MangoLovers</div>
+      <h1>Stock Report</h1>
+      <div class="sub">Period: ${range} · Generated: ${new Date().toLocaleString()}</div>
+    </div>
+  </div>
+  <div class="summary">
+    <div class="sum-item"><div class="sum-val" style="color:#3caf82">+${fmt(totalIn)}</div><div class="sum-lbl">Total Stock In</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#e55353">−${fmt(totalOut)}</div><div class="sum-lbl">Total Stock Out</div></div>
+    <div class="sum-item"><div class="sum-val">${_srFiltered.filter(r=>r.stockIn>0||r.stockOut>0).length}</div><div class="sum-lbl">Active Items</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#f5a623">৳${fmtM(totalVal)}</div><div class="sum-lbl">Stock Value</div></div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Item ID</th><th>Name</th><th style="text-align:center">UoM</th>
+      <th style="text-align:center">Stock In</th><th style="text-align:center">Stock Out</th>
+      <th style="text-align:center">Returns</th><th style="text-align:center">Net</th>
+      <th style="text-align:right">Current Stock</th><th style="text-align:right">Stock Value</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="footer">MangoLovers Inventory System · Stock Report · ${new Date().toLocaleDateString()}</div>
   </body></html>`);
   win.document.close();
   win.focus();
