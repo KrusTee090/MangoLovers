@@ -62,19 +62,21 @@ async function loadDashboardStats() {
     const yest  = new Date(now); yest.setDate(yest.getDate() - 1);
     const yesterday = yest.toISOString().split('T')[0];
 
-    // Today's revenue
+    // Today's revenue (exclude returned)
     const { data: todaySales } = await db
       .from('sales')
       .select('id, sale_items!sale_items_sale_id_fkey(subtotal)')
+      .neq('payment_status', 'returned')
       .gte('sale_date', `${today}T00:00:00`)
       .lte('sale_date', `${today}T23:59:59`);
     const todayRevenue = (todaySales || []).reduce((sum, s) =>
       sum + (Array.isArray(s.sale_items) ? s.sale_items : []).reduce((a, si) => a + parseFloat(si.subtotal || 0), 0), 0);
 
-    // Yesterday's revenue for % comparison
+    // Yesterday's revenue for % comparison (exclude returned)
     const { data: yesterdaySales } = await db
       .from('sales')
       .select('id, sale_items!sale_items_sale_id_fkey(subtotal)')
+      .neq('payment_status', 'returned')
       .gte('sale_date', `${yesterday}T00:00:00`)
       .lte('sale_date', `${yesterday}T23:59:59`);
     const yesterdayRevenue = (yesterdaySales || []).reduce((sum, s) =>
@@ -137,6 +139,7 @@ async function loadChartData() {
     const { data: weekSales } = await db
       .from('sales')
       .select('sale_date, sale_items!sale_items_sale_id_fkey(subtotal)')
+      .neq('payment_status', 'returned')
       .gte('sale_date', weekStart.toISOString());
     const { data: weekPurch } = await db
       .from('supplier_purchases')
@@ -165,6 +168,7 @@ async function loadChartData() {
     const { data: yearSales } = await db
       .from('sales')
       .select('sale_date, sale_items!sale_items_sale_id_fkey(subtotal)')
+      .neq('payment_status', 'returned')
       .gte('sale_date', `${year}-01-01T00:00:00`)
       .lte('sale_date', `${year}-12-31T23:59:59`);
     const { data: yearPurch } = await db
@@ -190,6 +194,7 @@ async function loadChartData() {
     const { data: allSales } = await db
       .from('sales')
       .select('sale_date, sale_items!sale_items_sale_id_fkey(subtotal)')
+      .neq('payment_status', 'returned')
       .gte('sale_date', `${year-4}-01-01T00:00:00`);
     const { data: allPurch } = await db
       .from('supplier_purchases')
@@ -373,7 +378,7 @@ async function loadSales() {
 
     if (error) throw error;
 
-    const statusMap = { paid: 'Completed', pending: 'Pending', partial: 'Pending', partial_paid: 'Pending' };
+    const statusMap = { paid: 'Completed', pending: 'Pending', partial: 'Pending', partial_paid: 'Pending', returned: 'Returned' };
     const payLabel = t => ({ bkash:'bKash', nagad:'Nagad', cash:'Cash', card:'Card' }[String(t).toLowerCase()] || t);
 
     const mapped = (data || []).map(row => {
@@ -430,12 +435,14 @@ async function loadSales() {
     renderInvoices();
 
     // Update sales stats
-    const totalRevenue = recentSales.reduce((s, r) => s + r.total, 0);
+    const totalRevenue = recentSales.filter(r => r.status !== 'Returned').reduce((s, r) => s + r.total, 0);
     const pending = recentSales.filter(r => r.status === 'Pending').length;
     const miniStats = document.querySelectorAll('#page-sales .mini-stat-val');
     if (miniStats[0]) miniStats[0].textContent = `৳${totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 0 })}`;
     if (miniStats[1]) miniStats[1].textContent = recentSales.length;
     if (miniStats[2]) miniStats[2].textContent = pending;
+
+    updateDashboardFinCards();
 
   } catch (err) {
     console.error('Load sales error:', err);
@@ -461,7 +468,7 @@ async function loadPurchases() {
 
     if (error) throw error;
 
-    const statusMap = { paid: 'Received', pending: 'Pending', partial_paid: 'In Transit', partial: 'In Transit' };
+    const statusMap = { paid: 'Received', pending: 'Pending', partial_paid: 'In Transit', partial: 'In Transit', returned: 'Returned' };
 
     const mapped = (data || []).map(row => {
       // Safely handle supplier
@@ -514,7 +521,7 @@ async function loadPurchases() {
     renderPurchases();
 
     /* ── Update mini-stats on purchases page ── */
-    const totalVal  = purchases.reduce((s, p) => s + p.total, 0);
+    const totalVal  = purchases.filter(p => p.status !== 'Returned').reduce((s, p) => s + p.total, 0);
     const pendingCt = purchases.filter(p => p.status === 'Pending' || p.status === 'In Transit').length;
     const overdueCt = purchases.filter(p => p.status === 'Overdue').length;
     const ms = document.querySelectorAll('#page-purchases .mini-stat-val');
@@ -522,6 +529,8 @@ async function loadPurchases() {
     if (ms[1]) ms[1].textContent = '৳' + totalVal.toLocaleString('en-IN', { minimumFractionDigits: 0 });
     if (ms[2]) ms[2].textContent = pendingCt;
     if (ms[3]) ms[3].textContent = overdueCt;
+
+    updateDashboardFinCards();
 
   } catch (err) {
     console.error('Load purchases error:', err);
@@ -584,14 +593,79 @@ async function savePurchaseToDB(formData) {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   DASHBOARD FIN CARDS  –  reads from already-loaded arrays
+   ═══════════════════════════════════════════════════════════ */
+function updateDashboardFinCards() {
+  const fmt = v => '৳' + v.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+
+  // Total Sales — all non-returned sales
+  const totalSales = recentSales
+    .filter(s => s.status !== 'Returned')
+    .reduce((sum, s) => sum + (s.total || 0), 0);
+
+  // Total Purchase — all non-returned purchases
+  const totalPurchase = purchases
+    .filter(p => p.status !== 'Returned')
+    .reduce((sum, p) => sum + (p.total || 0), 0);
+
+  // Invoice Due — sales with Pending status (customer hasn't paid yet)
+  const invoiceDue = recentSales
+    .filter(s => s.status === 'Pending')
+    .reduce((sum, s) => sum + (s.total || 0), 0);
+
+  // Purchase Due — purchases still Pending or In Transit
+  const purchaseDue = purchases
+    .filter(p => p.status === 'Pending' || p.status === 'In Transit')
+    .reduce((sum, p) => sum + (p.total || 0), 0);
+
+  // Expense — kept as 0 until expense module is built
+  const expense = 0;
+
+  // Net = Total Sales − Expense (invoice due is receivable, not a deduction)
+  const net = totalSales - expense;
+
+  // Update DOM
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt(val); };
+  set('fin-total-sales',    totalSales);
+  set('fin-total-purchase', totalPurchase);
+  set('fin-invoice-due',    invoiceDue);
+  set('fin-purchase-due',   purchaseDue);
+  set('fin-expense',        expense);
+
+  // Net card — special handling for colour + icon
+  const netValEl   = document.getElementById('fin-net-val');
+  const netIconBox = document.getElementById('fin-net-icon-box');
+  const netIcon    = document.getElementById('fin-net-icon');
+  const netAccent  = document.getElementById('fin-net-accent');
+  if (netValEl) {
+    const positive = net >= 0;
+    const color    = positive ? 'var(--mint)' : 'var(--red)';
+    const bg       = positive ? 'rgba(60,175,130,0.12)' : 'rgba(229,83,83,0.12)';
+    netValEl.textContent    = (net < 0 ? '-' : '') + '৳' + Math.abs(net).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    netValEl.style.color    = color;
+    if (netIconBox) netIconBox.style.background = bg;
+    if (netAccent)  netAccent.style.background  = `linear-gradient(90deg,transparent,${color},transparent)`;
+    if (netIcon) {
+      netIcon.setAttribute('stroke', color);
+      netIcon.innerHTML = positive
+        ? '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>'
+        : '<polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>';
+    }
+  }
+
+  // Also refresh the net card in ml-inventory.js if it exists
+  if (typeof renderFinancialSummary === 'function') renderFinancialSummary();
+}
+
+/* ═══════════════════════════════════════════════════════════
    SALES & PURCHASE REPORT (Updated error checking)
    ═══════════════════════════════════════════════════════════ */
 
 function loadSalesPurchaseReport() {
   try {
-    const totalSale     = recentSales.reduce((s, r) => s + (r.total || 0), 0);
+    const totalSale     = recentSales.filter(r => r.status !== 'Returned').reduce((s, r) => s + (r.total || 0), 0);
     const saleDue       = recentSales.filter(r => r.status === 'Pending').reduce((s, r) => s + (r.total || 0), 0);
-    const totalPurchase = purchases.reduce((s, p) => s + (p.total || 0), 0);
+    const totalPurchase = purchases.filter(p => p.status !== 'Returned').reduce((s, p) => s + (p.total || 0), 0);
     const purchaseDue   = purchases.filter(p => p.status === 'Pending' || p.status === 'In Transit').reduce((s, p) => s + (p.total || 0), 0);
 
     setText('totalPurchase',        totalPurchase);
@@ -668,6 +742,137 @@ function setText(id, value, colorize = false) {
 
 
 /* ═══════════════════════════════════════════════════════════
+   RETURNS  –  Sales Returns & Purchase Returns
+   ═══════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   RETURNS  –  reads from existing sales / supplier_purchases
+               tables where payment_status = 'returned'
+   ═══════════════════════════════════════════════════════════ */
+async function loadSalesReturns() {
+  try {
+    const { data, error } = await db
+      .from('sales')
+      .select(`
+        id, payment_type, payment_status, sale_date, paid_amount,
+        customers!customer_id(name),
+        sale_items!sale_items_sale_id_fkey(
+          quantity, unit_price, subtotal,
+          items!item_id(id, name, uom)
+        )
+      `)
+      .eq('payment_status', 'returned')
+      .order('sale_date', { ascending: false });
+    if (error) throw error;
+
+    console.log('[Returns] Sales returned rows:', (data||[]).length);
+
+    salesReturns.length = 0;
+    (data || []).forEach(row => {
+      const cust   = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+      const sItems = Array.isArray(row.sale_items) ? row.sale_items : (row.sale_items ? [row.sale_items] : []);
+      const productNames = sItems.map(si => {
+        const it = Array.isArray(si.items) ? si.items[0] : si.items;
+        return it?.name || 'Unknown Item';
+      }).join(', ') || '—';
+      const totalQty    = sItems.reduce((s, si) => s + (si.quantity || 0), 0);
+      const refundAmt   = sItems.reduce((s, si) => s + parseFloat(si.subtotal || 0), 0);
+      const date        = row.sale_date ? row.sale_date.split('T')[0] : '—';
+
+      salesReturns.push({
+        _dbId:     row.id,
+        id:        'SR-' + String(row.id).slice(0, 8).toUpperCase(),
+        invoiceId: String(row.id).slice(0, 8).toUpperCase(),
+        customer:  cust?.name || 'Walk-in',
+        product:   productNames,
+        qty:       totalQty,
+        refundAmt: refundAmt,
+        reason:    '—',
+        status:    'Returned',
+        date:      date,
+      });
+    });
+
+    renderSalesReturns();
+  } catch (err) {
+    console.error('Load sales returns error:', err);
+    showBanner('error', `⚠️ Could not load sales returns: ${err.message}`);
+  }
+}
+
+async function loadPurchaseReturns() {
+  try {
+    const { data, error } = await db
+      .from('supplier_purchases')
+      .select(`
+        id, total_amount, purchase_date, payment_status,
+        suppliers(name),
+        items!item_id(id, name, uom),
+        quantity
+      `)
+      .eq('payment_status', 'returned')
+      .order('purchase_date', { ascending: false });
+    if (error) throw error;
+
+    console.log('[Returns] Purchase returned rows:', (data||[]).length);
+
+    purchaseReturns.length = 0;
+    (data || []).forEach(row => {
+      const supp    = Array.isArray(row.suppliers) ? row.suppliers[0] : row.suppliers;
+      const itemObj = Array.isArray(row.items) ? row.items[0] : row.items;
+      const date    = row.purchase_date ? row.purchase_date.split('T')[0] : '—';
+
+      purchaseReturns.push({
+        _dbId:     row.id,
+        id:        'PR-' + String(row.id).slice(0, 8).toUpperCase(),
+        poId:      'PO-' + String(row.id).slice(0, 8).toUpperCase(),
+        supplier:  supp?.name || '—',
+        product:   itemObj?.name || '—',
+        qty:       row.quantity || 0,
+        creditAmt: parseFloat(row.total_amount) || 0,
+        reason:    '—',
+        status:    'Returned',
+        date:      date,
+      });
+    });
+
+    renderPurchaseReturns();
+  } catch (err) {
+    console.error('Load purchase returns error:', err);
+    showBanner('error', `⚠️ Could not load purchase returns: ${err.message}`);
+  }
+}
+
+/* Mark a sale as returned by updating its payment_status */
+async function markSaleAsReturned(saleId) {
+  try {
+    const { error } = await db
+      .from('sales')
+      .update({ payment_status: 'returned' })
+      .eq('id', saleId);
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    console.error('Mark sale returned error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/* Mark a purchase as returned by updating its payment_status */
+async function markPurchaseAsReturned(purchaseId) {
+  try {
+    const { error } = await db
+      .from('supplier_purchases')
+      .update({ payment_status: 'returned' })
+      .eq('id', purchaseId);
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    console.error('Mark purchase returned error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
    REAL-TIME SUBSCRIPTIONS  –  auto-refresh tables on change
    ═══════════════════════════════════════════════════════════ */
 function setupRealtimeSubscriptions() {
@@ -676,7 +881,8 @@ function setupRealtimeSubscriptions() {
       () => loadProducts())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' },
       () => { 
-        loadSales(); 
+        loadSales();
+        loadSalesReturns();
         loadDashboardStats(); 
         loadSalesPurchaseReport("this_year");
       })
@@ -687,6 +893,7 @@ function setupRealtimeSubscriptions() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'supplier_purchases' },
       () => { 
         loadPurchases();
+        loadPurchaseReturns();
         loadSalesPurchaseReport("this_year");
       })
     .subscribe();
@@ -770,9 +977,11 @@ async function initSupabase() {
     ['products',   loadProducts],
     ['customers',  loadCustomers],
     ['suppliers',  loadSuppliers],
-    ['sales',      loadSales],
-    ['purchases',  loadPurchases],
-    ['dashboard',  loadDashboardStats],
+    ['sales',          loadSales],
+    ['purchases',      loadPurchases],
+    ['sales-returns',  loadSalesReturns],
+    ['purch-returns',  loadPurchaseReturns],
+    ['dashboard',      loadDashboardStats],
   ];
 
   // Load chart data from DB
@@ -802,4 +1011,270 @@ async function initSupabase() {
   if (dateFilterEl) {
     dateFilterEl.addEventListener('change', () => loadSalesPurchaseReport(dateFilterEl.value));
   }
+}
+/* ═══════════════════════════════════════════════════════════
+   PROFIT / LOSS REPORT
+   ═══════════════════════════════════════════════════════════ */
+
+// Active date filter state
+let _plFrom = null;
+let _plTo   = null;
+
+function plQuickFilter(range) {
+  const now   = new Date();
+  const pad   = n => String(n).padStart(2,'0');
+  const ymd   = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  let from, to;
+
+  if (range === 'all') {
+    from = null; to = null;
+  } else if (range === 'today') {
+    from = to = ymd(now);
+  } else if (range === 'week') {
+    const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay()+6)%7));
+    from = ymd(mon); to = ymd(now);
+  } else if (range === 'month') {
+    from = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
+    to   = ymd(now);
+  } else if (range === 'year') {
+    from = `${now.getFullYear()}-01-01`;
+    to   = ymd(now);
+  }
+
+  // Update pill UI
+  ['all','today','week','month','year'].forEach(k => {
+    const el = document.getElementById(`pl-pill-${k}`);
+    if (el) el.classList.toggle('active', k === range);
+  });
+
+  // Sync date inputs
+  const fromEl = document.getElementById('pl-from');
+  const toEl   = document.getElementById('pl-to');
+  if (fromEl) fromEl.value = from || '';
+  if (toEl)   toEl.value   = to   || '';
+
+  _plFrom = from; _plTo = to;
+  loadProfitLossReport();
+}
+
+async function loadProfitLossReport() {
+  // Read date inputs if not set by quick filter
+  const fromEl = document.getElementById('pl-from');
+  const toEl   = document.getElementById('pl-to');
+  const from = fromEl?.value || _plFrom || null;
+  const to   = toEl?.value   || _plTo   || null;
+
+  // Update subtitle
+  const sub = document.getElementById('pl-subtitle');
+  if (sub) sub.textContent = (from && to) ? `${from}  →  ${to}` : 'All transactions';
+
+  const plSet = (id, val) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const isNeg = val < 0;
+    el.textContent = (isNeg ? '−' : '') + '৳' + Math.abs(val).toLocaleString('en-IN', {minimumFractionDigits:2});
+    el.style.color = id === 'pl-gross' || id === 'pl-net'
+      ? (isNeg ? 'var(--red)' : 'var(--mint)')
+      : '';
+  };
+
+  try {
+    /* ── 1. Fetch current stock from items (used for both opening & closing) ── */
+    const { data: items } = await db.from('items').select('cost_price, selling_price, stock_quantity');
+    const stockCost = (items||[]).reduce((s,i) => s + parseFloat(i.cost_price||0) * (i.stock_quantity||0), 0);
+    const stockSale = (items||[]).reduce((s,i) => s + parseFloat(i.selling_price||0) * (i.stock_quantity||0), 0);
+
+    /* ── 2. Total purchases in range (non-returned) ── */
+    let purQuery = db.from('supplier_purchases')
+      .select('total_amount')
+      .neq('payment_status','returned');
+    if (from) purQuery = purQuery.gte('purchase_date', `${from}T00:00:00`);
+    if (to)   purQuery = purQuery.lte('purchase_date', `${to}T23:59:59`);
+    const { data: purRows } = await purQuery;
+    const totalPurchase = (purRows||[]).reduce((s,r) => s + parseFloat(r.total_amount||0), 0);
+
+    /* ── 3. Purchase returns in range ── */
+    let purRetQuery = db.from('supplier_purchases')
+      .select('total_amount')
+      .eq('payment_status','returned');
+    if (from) purRetQuery = purRetQuery.gte('purchase_date', `${from}T00:00:00`);
+    if (to)   purRetQuery = purRetQuery.lte('purchase_date', `${to}T23:59:59`);
+    const { data: purRetRows } = await purRetQuery;
+    const totalPurReturn = (purRetRows||[]).reduce((s,r) => s + parseFloat(r.total_amount||0), 0);
+
+    /* ── 4. Total sales in range (non-returned), using sale_items subtotals ── */
+    let saleQuery = db.from('sales')
+      .select('sale_items!sale_items_sale_id_fkey(subtotal)')
+      .neq('payment_status','returned');
+    if (from) saleQuery = saleQuery.gte('sale_date', `${from}T00:00:00`);
+    if (to)   saleQuery = saleQuery.lte('sale_date', `${to}T23:59:59`);
+    const { data: saleRows } = await saleQuery;
+    const totalSales = (saleRows||[]).reduce((sum,s) =>
+      sum + (s.sale_items||[]).reduce((a,si) => a + parseFloat(si.subtotal||0), 0), 0);
+
+    /* ── 5. Sale returns in range ── */
+    let saleRetQuery = db.from('sales')
+      .select('sale_items!sale_items_sale_id_fkey(subtotal)')
+      .eq('payment_status','returned');
+    if (from) saleRetQuery = saleRetQuery.gte('sale_date', `${from}T00:00:00`);
+    if (to)   saleRetQuery = saleRetQuery.lte('sale_date', `${to}T23:59:59`);
+    const { data: saleRetRows } = await saleRetQuery;
+    const totalSellReturn = (saleRetRows||[]).reduce((sum,s) =>
+      sum + (s.sale_items||[]).reduce((a,si) => a + parseFloat(si.subtotal||0), 0), 0);
+
+    /* ── 6. Zero-value fields (no expense module yet) ── */
+    const expense      = 0;
+    const stockAdj     = 0;
+    const purShipping  = 0;
+    const purAddl      = 0;
+    const transferShip = 0;
+    const sellDiscount = 0;
+    const custReward   = 0;
+    const sellShipping = 0;
+    const sellAddl     = 0;
+    const stockRecover = 0;
+    const purDiscount  = 0;
+    const sellRoundoff = 0;
+
+    /* ── 7. COGS, Gross Profit, Net Profit ── */
+    // Opening stock = current stock (no historical snapshot available)
+    // Closing stock = same (current)
+    // COGS = opening stock + purchases − closing stock
+    const COGS        = stockCost + totalPurchase - stockCost; // simplifies to totalPurchase when opening=closing
+    const grossProfit = totalSales - totalPurchase;
+    const netIncome   = sellShipping + sellAddl + stockRecover + purDiscount + sellRoundoff;
+    const netCost     = stockAdj + expense + purShipping + transferShip + purAddl + sellDiscount + custReward;
+    const netProfit   = grossProfit + netIncome - netCost;
+
+    /* ── 8. Populate DOM ── */
+    // Left card — cost side
+    plSet('pl-opening-cost',  stockCost);
+    plSet('pl-opening-sale',  stockSale);
+    plSet('pl-total-purchase',totalPurchase);
+    plSet('pl-stock-adj',     stockAdj);
+    plSet('pl-expense',       expense);
+    plSet('pl-pur-shipping',  purShipping);
+    plSet('pl-pur-addl',      purAddl);
+    plSet('pl-transfer-ship', transferShip);
+    plSet('pl-sell-discount', sellDiscount);
+    plSet('pl-cust-reward',   custReward);
+    plSet('pl-sell-return',   totalSellReturn);
+
+    // Right card — revenue side
+    plSet('pl-closing-cost',    stockCost);
+    plSet('pl-closing-sale',    stockSale);
+    plSet('pl-total-sales',     totalSales);
+    plSet('pl-sell-shipping',   sellShipping);
+    plSet('pl-sell-addl',       sellAddl);
+    plSet('pl-stock-recovered', stockRecover);
+    plSet('pl-pur-return',      totalPurReturn);
+    plSet('pl-pur-discount',    purDiscount);
+    plSet('pl-sell-roundoff',   sellRoundoff);
+
+    // Summary
+    plSet('pl-cogs',  COGS);
+    plSet('pl-gross', grossProfit);
+    plSet('pl-net',   netProfit);
+
+  } catch (err) {
+    console.error('P&L Report error:', err);
+    if (typeof toast === 'function') toast('Failed to load P&L: ' + err.message, 'error');
+  }
+}
+
+function printProfitLoss() {
+  const fromEl = document.getElementById('pl-from');
+  const toEl   = document.getElementById('pl-to');
+  const from = fromEl?.value || '';
+  const to   = toEl?.value   || '';
+  const range = (from && to) ? `${from} to ${to}` : 'All Time';
+
+  const getVal = id => document.getElementById(id)?.textContent || '৳0.00';
+  const row = (label, id, bold=false) =>
+    `<tr${bold?' style="font-weight:700"':''}><td>${label}</td><td style="text-align:right;font-family:monospace">${getVal(id)}</td></tr>`;
+
+  const win = window.open('', '_blank', 'width=860,height=700');
+  win.document.write(`<!DOCTYPE html><html><head>
+  <title>Profit / Loss Report</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'DM Sans',Arial,sans-serif;color:#1a2e22;background:#fff;padding:40px;font-size:13px}
+    h1{font-size:22px;font-weight:800;margin-bottom:4px}
+    .sub{color:#6b8a74;font-size:12px;margin-bottom:28px}
+    .brand{font-size:13px;font-weight:700;margin-bottom:2px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px}
+    .box{border:1px solid #e0ede7;border-radius:10px;overflow:hidden}
+    .box-title{background:#f7faf8;padding:10px 16px;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#4a6659;border-bottom:1px solid #e0ede7}
+    table{width:100%;border-collapse:collapse}
+    td{padding:9px 16px;border-bottom:1px solid #f0f6f2}
+    tr:last-child td{border-bottom:none}
+    .summary{border:2px solid #3caf82;border-radius:12px;padding:24px 28px;margin-bottom:20px}
+    .sum-row{display:flex;justify-content:space-between;align-items:baseline;padding:12px 0;border-bottom:1px solid #e0ede7}
+    .sum-row:last-child{border-bottom:none}
+    .sum-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7fa393}
+    .sum-val{font-size:24px;font-weight:800;font-family:monospace}
+    .sum-val.cogs{color:#1a2e22;font-size:20px}
+    .sum-val.gross{color:#3caf82}
+    .sum-val.net{font-size:28px}
+    .footer{text-align:center;color:#a8c5b8;font-size:11px;border-top:1px solid #e0ede7;padding-top:14px;margin-top:20px}
+    @media print{body{padding:20px}}
+  </style></head><body>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+    <div>
+      <div class="brand">MangoLovers</div>
+      <h1>Profit / Loss Report</h1>
+      <div class="sub">Period: ${range} &nbsp;·&nbsp; Generated: ${new Date().toLocaleString()}</div>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="box">
+      <div class="box-title">Cost Side</div>
+      <table>
+        ${row('Opening Stock (By purchase price)','pl-opening-cost')}
+        ${row('Opening Stock (By sale price)','pl-opening-sale')}
+        ${row('Total Purchase (Exc. tax, Discount)','pl-total-purchase',true)}
+        ${row('Total Stock Adjustment','pl-stock-adj')}
+        ${row('Total Expense','pl-expense')}
+        ${row('Total Purchase Shipping','pl-pur-shipping')}
+        ${row('Purchase Additional Expenses','pl-pur-addl')}
+        ${row('Total Transfer Shipping','pl-transfer-ship')}
+        ${row('Total Sell Discount','pl-sell-discount')}
+        ${row('Total Customer Reward','pl-cust-reward')}
+        ${row('Total Sell Return','pl-sell-return')}
+      </table>
+    </div>
+    <div class="box">
+      <div class="box-title">Revenue Side</div>
+      <table>
+        ${row('Closing Stock (By purchase price)','pl-closing-cost')}
+        ${row('Closing Stock (By sale price)','pl-closing-sale')}
+        ${row('Total Sales (Exc. tax, Discount)','pl-total-sales',true)}
+        ${row('Total Sell Shipping Charge','pl-sell-shipping')}
+        ${row('Sell Additional Expenses','pl-sell-addl')}
+        ${row('Total Stock Recovered','pl-stock-recovered')}
+        ${row('Total Purchase Return','pl-pur-return')}
+        ${row('Total Purchase Discount','pl-pur-discount')}
+        ${row('Total Sell Round Off','pl-sell-roundoff')}
+      </table>
+    </div>
+  </div>
+  <div class="summary">
+    <div class="sum-row">
+      <div><div class="sum-label">COGS</div><div style="font-size:11px;color:#a8c5b8;margin-top:3px">Opening Stock + Purchases − Closing Stock</div></div>
+      <div class="sum-val cogs">${getVal('pl-cogs')}</div>
+    </div>
+    <div class="sum-row">
+      <div><div class="sum-label">Gross Profit</div><div style="font-size:11px;color:#a8c5b8;margin-top:3px">Total Sales − Total Purchases</div></div>
+      <div class="sum-val gross">${getVal('pl-gross')}</div>
+    </div>
+    <div class="sum-row">
+      <div><div class="sum-label">Net Profit</div><div style="font-size:11px;color:#a8c5b8;margin-top:3px">Gross Profit + Revenue additions − Cost deductions</div></div>
+      <div class="sum-val net" style="color:${document.getElementById('pl-net')?.style.color||'#3caf82'}">${getVal('pl-net')}</div>
+    </div>
+  </div>
+  <div class="footer">MangoLovers Inventory System · Profit / Loss Report · ${new Date().toLocaleDateString()}</div>
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 400);
 }

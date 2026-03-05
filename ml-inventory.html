@@ -84,6 +84,10 @@
         <span class="icon nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
         Purchase and Sell Report
       </div>
+      <div class="nav-item" data-page="profit-loss">
+        <span class="icon nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></span>
+        Profit and Loss Report
+      </div>
       <div class="nav-item" data-page="analytics">
         <span class="icon nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
         Analytics
@@ -193,7 +197,7 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--mint)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             </div>
           </div>
-          <div class="stat-val" style="color:var(--mint)" id="fin-total-sales">৳3,132.87</div>
+          <div class="stat-val" style="color:var(--mint)" id="fin-total-sales">৳0.00</div>
           <div class="stat-foot"><span class="stat-sub">Gross revenue</span></div>
           <div class="accent-line" style="background:linear-gradient(90deg,transparent,var(--mint),transparent)"></div>
         </div>
@@ -206,7 +210,7 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
             </div>
           </div>
-          <div class="stat-val" style="color:var(--blue)" id="fin-total-purchase">৳28,920.00</div>
+          <div class="stat-val" style="color:var(--blue)" id="fin-total-purchase">৳0.00</div>
           <div class="stat-foot"><span class="stat-sub">All purchase orders</span></div>
           <div class="accent-line" style="background:linear-gradient(90deg,transparent,var(--blue),transparent)"></div>
         </div>
@@ -219,7 +223,7 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             </div>
           </div>
-          <div class="stat-val" style="color:var(--purple)" id="fin-invoice-due">৳1,848.00</div>
+          <div class="stat-val" style="color:var(--purple)" id="fin-invoice-due">৳0.00</div>
           <div class="stat-foot"><span class="stat-sub">Owed by customers</span></div>
           <div class="accent-line" style="background:linear-gradient(90deg,transparent,var(--purple),transparent)"></div>
         </div>
@@ -232,7 +236,7 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--mango)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             </div>
           </div>
-          <div class="stat-val" style="color:var(--mango-dk)" id="fin-purchase-due">৳21,980.00</div>
+          <div class="stat-val" style="color:var(--mango-dk)" id="fin-purchase-due">৳0.00</div>
           <div class="stat-foot"><span class="stat-sub">Owed to suppliers</span></div>
           <div class="accent-line" style="background:linear-gradient(90deg,transparent,var(--mango),transparent)"></div>
         </div>
@@ -245,7 +249,7 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V22H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
             </div>
           </div>
-          <div class="stat-val" style="color:var(--red)" id="fin-expense">৳30,450.00</div>
+          <div class="stat-val" style="color:var(--red)" id="fin-expense">৳0.00</div>
           <div class="stat-foot"><span class="stat-sub">All outgoing costs</span></div>
           <div class="accent-line" style="background:linear-gradient(90deg,transparent,var(--red),transparent)"></div>
         </div>
@@ -259,7 +263,7 @@
             </div>
           </div>
           <div class="stat-val" id="fin-net-val">৳0.00</div>
-          <div class="stat-foot"><span class="stat-sub">Sales − Invoice Due − Expense</span></div>
+          <div class="stat-foot"><span class="stat-sub">Total Sales − Expenses</span></div>
           <div class="accent-line" id="fin-net-accent" style="background:linear-gradient(90deg,transparent,var(--mint),transparent)"></div>
         </div>
 
@@ -437,37 +441,101 @@
     </div>
 
         <!-- ══ SALES RETURNS ══ -->
-    <div class="page-section" id="page-sales-returns">
-      <div class="section-hdr">
-        <div><h2>Sales Returns</h2><p>Customer returns &amp; refunds</p></div>
-        <button class="btn btn-primary" onclick="openNewSalesReturn()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Return</button>
-      </div>
-      <div class="stat-grid g3" style="margin-bottom:14px">
-        <div class="mini-stat fade-up d1"><div class="mini-stat-icon" style="background:var(--red-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg></div><div><div class="mini-stat-val" id="sr-total-count" style="color:var(--red)">2</div><div class="mini-stat-lbl">Total Returns</div></div></div>
-        <div class="mini-stat fade-up d2"><div class="mini-stat-icon" style="background:var(--mango-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--mango)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="mini-stat-val" id="sr-pending-count" style="color:var(--mango-dk)">1</div><div class="mini-stat-lbl">Pending</div></div></div>
-        <div class="mini-stat fade-up d3"><div class="mini-stat-icon" style="background:var(--green-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><div><div class="mini-stat-val" id="sr-processed-count" style="color:var(--green)">1</div><div class="mini-stat-lbl">Processed</div></div></div>
-      </div>
-      <div class="card"><div class="tbl-wrap"><table>
-        <thead><tr><th>Return ID</th><th>Original Invoice</th><th>Customer</th><th>Product</th><th>Qty</th><th>Refund Amt</th><th>Reason</th><th>Status</th><th></th></tr></thead>
-        <tbody id="salesReturnsTbody"></tbody>
-      </table></div></div>
-    </div>
+    <!-- ══ RETURNS (unified page) ══ -->
+    <div class="page-section" id="page-returns">
 
-    <!-- ══ PURCHASE RETURNS ══ -->
-    <div class="page-section" id="page-purchase-returns">
-      <div class="section-hdr">
-        <div><h2>Purchase Returns</h2><p>Returns to suppliers</p></div>
-        <button class="btn btn-primary" onclick="openNewPurchaseReturn()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Return</button>
+      <!-- top summary stats across both return types -->
+      <div class="stat-grid g4" style="margin-bottom:20px">
+        <div class="mini-stat fade-up d1">
+          <div class="mini-stat-icon" style="background:var(--red-bg)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+          </div>
+          <div>
+            <div class="mini-stat-val" id="sr-total-count" style="color:var(--red)">0</div>
+            <div class="mini-stat-lbl">Sales Returns</div>
+          </div>
+        </div>
+        <div class="mini-stat fade-up d2">
+          <div class="mini-stat-icon" style="background:var(--red-bg)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <div>
+            <div class="mini-stat-val" id="sr-refund-total" style="color:var(--red);font-size:15px">৳0</div>
+            <div class="mini-stat-lbl">Total Refund Value</div>
+          </div>
+        </div>
+        <div class="mini-stat fade-up d3">
+          <div class="mini-stat-icon" style="background:var(--blue-bg)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3.51"/></svg>
+          </div>
+          <div>
+            <div class="mini-stat-val" id="pr-total-count" style="color:var(--blue)">0</div>
+            <div class="mini-stat-lbl">Purchase Returns</div>
+          </div>
+        </div>
+        <div class="mini-stat fade-up d4">
+          <div class="mini-stat-icon" style="background:var(--blue-bg)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <div>
+            <div class="mini-stat-val" id="pr-credit-total" style="color:var(--blue);font-size:15px">৳0</div>
+            <div class="mini-stat-lbl">Total Credit Value</div>
+          </div>
+        </div>
       </div>
-      <div class="stat-grid g3" style="margin-bottom:14px">
-        <div class="mini-stat fade-up d1"><div class="mini-stat-icon" style="background:var(--red-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3.51"/></svg></div><div><div class="mini-stat-val" id="pr-total-count" style="color:var(--red)">1</div><div class="mini-stat-lbl">Total Returns</div></div></div>
-        <div class="mini-stat fade-up d2"><div class="mini-stat-icon" style="background:var(--mango-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--mango)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="mini-stat-val" id="pr-pending-count" style="color:var(--mango-dk)">0</div><div class="mini-stat-lbl">Pending</div></div></div>
-        <div class="mini-stat fade-up d3"><div class="mini-stat-icon" style="background:var(--green-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><div><div class="mini-stat-val" id="pr-approved-count" style="color:var(--green)">1</div><div class="mini-stat-lbl">Approved</div></div></div>
+
+      <!-- tab switcher -->
+      <div class="returns-tab-bar">
+        <button class="returns-tab active" id="rtab-sales" onclick="switchReturnsTab('sales')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+          Sales Returns
+          <span class="returns-tab-count" id="sr-tab-count">0</span>
+        </button>
+        <button class="returns-tab" id="rtab-purchases" onclick="switchReturnsTab('purchases')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3.51"/></svg>
+          Purchase Returns
+          <span class="returns-tab-count" id="pr-tab-count">0</span>
+        </button>
+        <div class="returns-tab-actions">
+          <button class="btn btn-primary" id="returns-new-btn" onclick="openNewSalesReturn()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Return
+          </button>
+        </div>
       </div>
-      <div class="card"><div class="tbl-wrap"><table>
-        <thead><tr><th>Return ID</th><th>PO Number</th><th>Supplier</th><th>Product</th><th>Qty</th><th>Credit Amt</th><th>Reason</th><th>Status</th><th></th></tr></thead>
-        <tbody id="purchaseReturnsTbody"></tbody>
-      </table></div></div>
+
+      <!-- SALES RETURNS panel -->
+      <div id="rpanel-sales" class="returns-panel active">
+        <div class="card">
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr>
+                <th>Return ID</th><th>Invoice Ref</th><th>Customer</th>
+                <th>Products</th><th>Qty</th><th>Refund Value</th>
+                <th>Date</th><th>Status</th><th></th>
+              </tr></thead>
+              <tbody id="salesReturnsTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- PURCHASE RETURNS panel -->
+      <div id="rpanel-purchases" class="returns-panel" style="display:none">
+        <div class="card">
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr>
+                <th>Return ID</th><th>PO Reference</th><th>Supplier</th>
+                <th>Product</th><th>Qty</th><th>Credit Value</th>
+                <th>Date</th><th>Status</th><th></th>
+              </tr></thead>
+              <tbody id="purchaseReturnsTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <!-- ══ CUSTOMERS ══ -->
@@ -618,6 +686,103 @@
 
   </div>
 
+
+    <!-- ══ PROFIT / LOSS REPORT ══ -->
+    <div class="page-section" id="page-profit-loss">
+      <div class="section-hdr">
+        <div><h2>Profit and Loss Report</h2><p id="pl-subtitle">Based on all transactions</p></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div style="display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:0 10px;height:34px">
+            <span style="font-size:11.5px;color:var(--text-soft)">From</span>
+            <input type="date" id="pl-from" style="border:none;background:transparent;font-size:12px;color:var(--text);outline:none;font-family:inherit">
+            <span style="font-size:11.5px;color:var(--text-soft)">To</span>
+            <input type="date" id="pl-to" style="border:none;background:transparent;font-size:12px;color:var(--text);outline:none;font-family:inherit">
+          </div>
+          <button class="btn btn-primary" onclick="loadProfitLossReport()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Apply
+          </button>
+          <button class="btn btn-outline" onclick="printProfitLoss()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Print
+          </button>
+        </div>
+      </div>
+
+      <!-- quick filter pills -->
+      <div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap">
+        <span class="pill active" id="pl-pill-all"    onclick="plQuickFilter('all')">All Time</span>
+        <span class="pill" id="pl-pill-today"   onclick="plQuickFilter('today')">Today</span>
+        <span class="pill" id="pl-pill-week"    onclick="plQuickFilter('week')">This Week</span>
+        <span class="pill" id="pl-pill-month"   onclick="plQuickFilter('month')">This Month</span>
+        <span class="pill" id="pl-pill-year"    onclick="plQuickFilter('year')">This Year</span>
+      </div>
+
+      <!-- two-column cards matching the screenshot -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px" id="pl-cards-wrap">
+
+        <!-- LEFT: cost side -->
+        <div class="card" id="pl-left-card">
+          <div class="card-hdr"><div class="card-title">Cost Side</div></div>
+          <div style="padding:4px 0">
+            <div class="pl-row"><span>Opening Stock <span class="pl-hint">(By purchase price)</span></span><span id="pl-opening-cost">৳0.00</span></div>
+            <div class="pl-row"><span>Opening Stock <span class="pl-hint">(By sale price)</span></span><span id="pl-opening-sale">৳0.00</span></div>
+            <div class="pl-row pl-sep"><span>Total Purchase <span class="pl-hint">(Exc. tax, Discount)</span></span><span id="pl-total-purchase">৳0.00</span></div>
+            <div class="pl-row"><span>Total Stock Adjustment</span><span id="pl-stock-adj">৳0.00</span></div>
+            <div class="pl-row"><span>Total Expense</span><span id="pl-expense">৳0.00</span></div>
+            <div class="pl-row"><span>Total Purchase Shipping</span><span id="pl-pur-shipping">৳0.00</span></div>
+            <div class="pl-row"><span>Purchase Additional Expenses</span><span id="pl-pur-addl">৳0.00</span></div>
+            <div class="pl-row"><span>Total Transfer Shipping</span><span id="pl-transfer-ship">৳0.00</span></div>
+            <div class="pl-row"><span>Total Sell Discount</span><span id="pl-sell-discount">৳0.00</span></div>
+            <div class="pl-row"><span>Total Customer Reward</span><span id="pl-cust-reward">৳0.00</span></div>
+            <div class="pl-row"><span>Total Sell Return</span><span id="pl-sell-return">৳0.00</span></div>
+          </div>
+        </div>
+
+        <!-- RIGHT: revenue side -->
+        <div class="card" id="pl-right-card">
+          <div class="card-hdr"><div class="card-title">Revenue Side</div></div>
+          <div style="padding:4px 0">
+            <div class="pl-row"><span>Closing Stock <span class="pl-hint">(By purchase price)</span></span><span id="pl-closing-cost">৳0.00</span></div>
+            <div class="pl-row pl-sep"><span>Closing Stock <span class="pl-hint">(By sale price)</span></span><span id="pl-closing-sale">৳0.00</span></div>
+            <div class="pl-row"><span>Total Sales <span class="pl-hint">(Exc. tax, Discount)</span></span><span id="pl-total-sales">৳0.00</span></div>
+            <div class="pl-row"><span>Total Sell Shipping Charge</span><span id="pl-sell-shipping">৳0.00</span></div>
+            <div class="pl-row"><span>Sell Additional Expenses</span><span id="pl-sell-addl">৳0.00</span></div>
+            <div class="pl-row"><span>Total Stock Recovered</span><span id="pl-stock-recovered">৳0.00</span></div>
+            <div class="pl-row"><span>Total Purchase Return</span><span id="pl-pur-return">৳0.00</span></div>
+            <div class="pl-row"><span>Total Purchase Discount</span><span id="pl-pur-discount">৳0.00</span></div>
+            <div class="pl-row"><span>Total Sell Round Off</span><span id="pl-sell-roundoff">৳0.00</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COGS / Gross / Net summary -->
+      <div class="card" id="pl-summary-card" style="padding:28px 32px">
+        <div style="margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:5px">
+            <span style="font-size:13px;font-weight:700;color:var(--text-soft);text-transform:uppercase;letter-spacing:.06em">COGS</span>
+            <span style="font-size:26px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--text)" id="pl-cogs">৳0.00</span>
+          </div>
+          <div style="font-size:11.5px;color:var(--text-faint)">Cost of Goods Sold = Opening Stock (purchase price) + Total Purchases − Closing Stock (purchase price)</div>
+        </div>
+        <div style="margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:5px">
+            <span style="font-size:13px;font-weight:700;color:var(--text-soft);text-transform:uppercase;letter-spacing:.06em">Gross Profit</span>
+            <span style="font-size:32px;font-weight:800;font-family:'JetBrains Mono',monospace" id="pl-gross">৳0.00</span>
+          </div>
+          <div style="font-size:11.5px;color:var(--text-faint)">Total Sales (sell price) − Total Purchases (cost price)</div>
+        </div>
+        <div>
+          <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:5px">
+            <span style="font-size:13px;font-weight:700;color:var(--text-soft);text-transform:uppercase;letter-spacing:.06em">Net Profit</span>
+            <span style="font-size:38px;font-weight:800;font-family:'JetBrains Mono',monospace" id="pl-net">৳0.00</span>
+          </div>
+          <div style="font-size:11.5px;color:var(--text-faint)" id="pl-net-formula">
+            Gross Profit + (Sell shipping + Sell additional + Stock recovered + Purchase discount + Sell round off) − (Stock adjustment + Expense + Purchase shipping + Transfer shipping + Purchase additional + Sell discount + Customer reward)
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- ══ ANALYTICS ══ -->
     <div class="page-section" id="page-analytics">

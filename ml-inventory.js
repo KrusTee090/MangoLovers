@@ -93,6 +93,7 @@ const statusBadge = s => {
     'In Transit':  ['b-blue',   truckSvg],
     'Out of Stock':['b-red',    xCircSvg],
     'Refunded':    ['b-red',    rotateSvg],
+    'Returned':    ['b-red',    rotateSvg],
     'Overdue':     ['b-red',    warnSvg],
     'Inactive':    ['b-grey',   ''],
   };
@@ -114,15 +115,28 @@ const pageCfg = {
 
   sales:      {title:'Sales',      sub:'Manage all transactions',    act:'New Sale'},
   purchases:  {title:'Purchases',  sub:'Purchase orders',            act:'New PO'},
-  'sales-returns':   {title:'Sales Returns',    sub:'Customer returns & refunds', act:'New Return'},
-  'purchase-returns': {title:'Purchase Returns', sub:'Returns to suppliers',       act:'New Return'},
+  returns:    {title:'Returns',    sub:'Sales & purchase returns',   act:null},
   customers:  {title:'Customers',  sub:'5 registered customers',     act:'Add Customer'},
   suppliers:  {title:'Suppliers',  sub:'6 registered suppliers',     act:'Add Supplier'},
-  reports:    {title:'Reports',    sub:'Analytics overview',         act:'Download'},
-  analytics:  {title:'Analytics',  sub:'Performance insights',       act:'Export'},
+  reports:    {title:'Reports',      sub:'Analytics overview',         act:'Download'},
+  'profit-loss': {title:'Profit / Loss Report', sub:'Business performance summary', act:null},
+  analytics:  {title:'Analytics',    sub:'Performance insights',       act:'Export'},
   invoices:   {title:'Invoices',   sub:'All issued invoices',        act:'New Invoice'},
   settings:   {title:'Settings',   sub:'System preferences',         act:null},
 };
+
+/* ── RETURNS TAB SWITCHER ── */
+function switchReturnsTab(tab) {
+  document.getElementById('rpanel-sales').style.display     = tab === 'sales'     ? '' : 'none';
+  document.getElementById('rpanel-purchases').style.display = tab === 'purchases' ? '' : 'none';
+  document.getElementById('rtab-sales').classList.toggle('active',     tab === 'sales');
+  document.getElementById('rtab-purchases').classList.toggle('active', tab === 'purchases');
+  const btn = document.getElementById('returns-new-btn');
+  if (btn) {
+    btn.onclick = tab === 'sales' ? openNewSalesReturn : openNewPurchaseReturn;
+    btn.childNodes[btn.childNodes.length-1].textContent = tab === 'sales' ? ' New Sales Return' : ' New Purchase Return';
+  }
+}
 
 /* ── REAL-TIME CLOCK for dashboard subtitle ── */
 function _updateDashClock() {
@@ -171,6 +185,12 @@ function navigate(page) {
   /* Refresh Purchase & Sell Report when navigating to it */
   if ((page === 'Purchase and Sell Report' || page === 'purchase-sell-report') && typeof loadSalesPurchaseReport === 'function') {
     loadSalesPurchaseReport();
+  }
+  if (page === 'profit-loss' && typeof loadProfitLossReport === 'function') {
+    // Default to "All Time" on first visit, keep current filter on revisit
+    const fromEl = document.getElementById('pl-from');
+    if (fromEl && !fromEl.value) plQuickFilter('all');
+    else loadProfitLossReport();
   }
   if (page === 'dashboard' && typeof loadChartData === 'function') {
     loadDashboardStats();
@@ -635,22 +655,40 @@ function filterSales(s,el){
 function renderSalesTable(){
   const q=document.getElementById('salesSearch').value.toLowerCase();
   const filt=recentSales.filter(s=>(s.customer.toLowerCase().includes(q)||s.id.toLowerCase().includes(q))&&(salesFilter==='All'||s.status===salesFilter));
-  document.getElementById('salesTbody').innerHTML=filt.map((s,i)=>`<tr style="animation:fadeUp .3s ease ${i*45}ms both">
+  document.getElementById('salesTbody').innerHTML=filt.map((s,i)=>`<tr style="animation:fadeUp .3s ease ${i*45}ms both;${s.status==='Returned'?'opacity:.6':''}">
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${s.id}</span></td>
     <td><div style="display:flex;align-items:center;gap:7px">
       <div style="width:26px;height:26px;border-radius:50%;background:var(--mango-bg);border:1px solid rgba(245,166,35,.25);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:var(--mango-dk);flex-shrink:0">${s.customer[0]}</div>${s.customer}</div></td>
-    <td><div style="font-size:10.5px;color:var(--text-faint);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.lineItems&&s.lineItems.length?s.lineItems.map(li=>li.id||'').filter(Boolean).join(', '):'\xe2\x80\x94'}</div></td>
+    <td><div style="font-size:10.5px;color:var(--text-faint);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.lineItems&&s.lineItems.length?s.lineItems.map(li=>li.id||'').filter(Boolean).join(', '):'—'}</div></td>
     <td><div style="font-size:11.5px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.itemSummary||''}"><span class="mono" style="color:var(--text-soft)">${s.items}</span> · ${s.itemSummary||'—'}</div></td>
-    <td><span class="mono" style="font-weight:700">৳${fmt(s.total)}</span></td>
+    <td><span class="mono" style="font-weight:700;${s.status==='Returned'?'text-decoration:line-through;color:var(--text-faint)':''}">৳${fmt(s.total)}</span></td>
     <td><span style="font-size:11.5px;${paymentColor(s.payment)}">${s.payment}</span></td>
     <td>${statusBadge(s.status)}</td>
     <td><span class="mono" style="font-size:10.5px;color:var(--text-faint)">${s.date}</span></td>
     <td><div class="act-group">
       <button class="act-btn" title="View" onclick="viewInvoice(recentSales.find(x=>x.id==='${s.id}'))">${svgIcon(eyeSvg,12)}</button>
+      <button class="act-btn edit" title="Edit" onclick="editSale(recentSales.find(x=>x.id==='${s.id}'))">${svgIcon(editSvg,12)}</button>
       <button class="act-btn" title="Print" onclick="printSale(recentSales.find(x=>x.id==='${s.id}'))">${svgIcon(printSvg,12)}</button>
-      <button class="act-btn danger" title="Return" onclick="toast('Return initiated for ${s.id}','info')">${svgIcon(rotateSvg,12)}</button>
+      ${s.status==='Returned'
+        ? `<button class="act-btn" title="Already returned" disabled style="opacity:.35;cursor:not-allowed">${svgIcon(rotateSvg,12)}</button>`
+        : `<button class="act-btn danger" title="Mark as Returned" onclick="_returnSale('${s._dbId}','${s.id}')">${svgIcon(rotateSvg,12)}</button>`
+      }
     </div></td>
   </tr>`).join('');
+}
+
+function _returnSale(dbId, displayId) {
+  if (!confirm(`Mark sale ${displayId} as returned?\n\nThis will set its status to Returned and remove it from total sales.`)) return;
+  markSaleAsReturned(dbId).then(res => {
+    if (res.success) {
+      toast(`Sale ${displayId} marked as returned ✓`);
+      loadSales();
+      loadSalesReturns();
+      loadDashboardStats();
+    } else {
+      toast('Failed: ' + res.error, 'error');
+    }
+  });
 }
 document.getElementById('salesSearch').addEventListener('input',renderSalesTable);
 document.getElementById('purchasesSearch')?.addEventListener('input',renderPurchases);
@@ -681,11 +719,11 @@ function renderPurchases(){
     return;
   }
 
-  document.getElementById('purchasesTbody').innerHTML=filtered.map((po,i)=>`<tr style="animation:fadeUp .3s ease ${i*55}ms both">
+  document.getElementById('purchasesTbody').innerHTML=filtered.map((po,i)=>`<tr style="animation:fadeUp .3s ease ${i*55}ms both;${po.status==='Returned'?'opacity:.6':''}">
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${po.id}</span></td>
     <td style="font-weight:600">${po.supplier}</td>
     <td><div style="font-size:11.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${po.itemSummary||''}"><span class="mono" style="color:var(--text-soft)">${po.items}</span> · ${po.itemSummary||'—'}</div></td>
-    <td><span class="mono" style="font-weight:700">৳${po.total.toLocaleString()}</span></td>
+    <td><span class="mono" style="font-weight:700;${po.status==='Returned'?'text-decoration:line-through;color:var(--text-faint)':''}">৳${po.total.toLocaleString()}</span></td>
     <td>${statusBadge(po.status)}</td>
     <td><span class="mono" style="font-size:11.5px;color:var(--text-soft)">${po.date}</span></td>
     <td><span class="mono" style="font-size:11.5px;${po.status==='Overdue'?'color:var(--red);font-weight:700':'color:var(--text-soft)'}">${po.dueDate}</span></td>
@@ -693,7 +731,10 @@ function renderPurchases(){
       <button class="act-btn" title="View" onclick="_poAction('view',${purchases.indexOf(po)})">${svgIcon(eyeSvg,12)}</button>
       <button class="act-btn edit" title="Edit" onclick="_poAction('edit',${purchases.indexOf(po)})">${svgIcon(editSvg,12)}</button>
       <button class="act-btn" title="Print" onclick="_poAction('print',${purchases.indexOf(po)})">${svgIcon(printSvg,12)}</button>
-      <button class="act-btn ok" title="Update status" onclick="_poAction('confirm',${purchases.indexOf(po)})">${svgIcon(checkSvg,12)}</button>
+      ${po.status==='Returned'
+        ? `<button class="act-btn" title="Already returned" disabled style="opacity:.35;cursor:not-allowed">${svgIcon(rotateSvg,12)}</button>`
+        : `<button class="act-btn danger" title="Mark as Returned" onclick="_poAction('return',${purchases.indexOf(po)})">${svgIcon(rotateSvg,12)}</button>`
+      }
     </div></td>
   </tr>`).join('');
 }
@@ -810,58 +851,82 @@ function renderReports(){
 function renderSalesReturns(){
   const tbody = document.getElementById('salesReturnsTbody');
   if(!tbody) return;
-  const s_icon = '<polyline points="20 6 9 17 4 12"/>';
-  const c_icon = '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>';
-  tbody.innerHTML = salesReturns.map((r,i) => `<tr style="animation:fadeUp .3s ease ${i*45}ms both">
+  if (!salesReturns.length) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px 24px;color:var(--text-faint)">
+      <div style="font-size:32px;margin-bottom:10px">↩️</div>
+      <div style="font-size:13px;font-weight:600;color:var(--text-soft);margin-bottom:6px">No sales returns yet</div>
+      <div style="font-size:12px;max-width:320px;margin:0 auto;line-height:1.6">
+        Sales with <code style="background:var(--red-bg);color:var(--red);padding:1px 5px;border-radius:4px">payment_status = returned</code> will appear here.<br>
+        Click <b>New Return</b> above to mark an existing sale as returned.
+      </div>
+    </td></tr>`;
+  } else {
+    tbody.innerHTML = salesReturns.map((r,i) => `<tr style="animation:fadeUp .3s ease ${i*45}ms both">
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${r.id}</span></td>
     <td><span class="mono" style="color:var(--text-soft);font-size:11.5px">${r.invoiceId}</span></td>
     <td>${r.customer}</td>
     <td style="font-size:12.5px">${r.product}</td>
     <td class="mono">${r.qty}</td>
     <td><span class="mono" style="font-weight:700;color:var(--red)">৳${r.refundAmt.toFixed(2)}</span></td>
-    <td style="font-size:12px;color:var(--text-soft)">${r.reason}</td>
+    <td style="font-size:12px;color:var(--text-soft)">${r.date}</td>
     <td>${statusBadge(r.status)}</td>
     <td><div class="act-group">
       <button class="act-btn" title="View" onclick="viewSalesReturn(salesReturns[${i}])">${svgIcon(eyeSvg,12)}</button>
       <button class="act-btn" title="Print" onclick="printSalesReturn(salesReturns[${i}])">${svgIcon(printSvg,12)}</button>
     </div></td>
   </tr>`).join('');
+  }
   // update stat counters
-  const pending   = salesReturns.filter(r=>r.status==='Pending').length;
-  const processed = salesReturns.filter(r=>r.status==='Processed').length;
-  const tc = document.getElementById('sr-total-count');
-  const pc = document.getElementById('sr-pending-count');
-  const rc = document.getElementById('sr-processed-count');
-  if(tc) tc.textContent = salesReturns.length;
-  if(pc) pc.textContent = pending;
-  if(rc) rc.textContent = processed;
+  const totalRefund = salesReturns.reduce((s,r) => s + r.refundAmt, 0);
+  const lastDate    = salesReturns.length ? salesReturns[0].date : '—';
+  const tc  = document.getElementById('sr-total-count');
+  const rtl = document.getElementById('sr-refund-total');
+  const ld  = document.getElementById('sr-last-date');
+  const tbc = document.getElementById('sr-tab-count');
+  if(tc)  tc.textContent  = salesReturns.length;
+  if(rtl) rtl.textContent = '৳' + totalRefund.toLocaleString('en-IN', {minimumFractionDigits:2});
+  if(ld)  ld.textContent  = lastDate;
+  if(tbc) tbc.textContent = salesReturns.length;
 }
 
 function renderPurchaseReturns(){
   const tbody = document.getElementById('purchaseReturnsTbody');
   if(!tbody) return;
-  tbody.innerHTML = purchaseReturns.map((r,i) => `<tr style="animation:fadeUp .3s ease ${i*45}ms both">
+  if (!purchaseReturns.length) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px 24px;color:var(--text-faint)">
+      <div style="font-size:32px;margin-bottom:10px">🔄</div>
+      <div style="font-size:13px;font-weight:600;color:var(--text-soft);margin-bottom:6px">No purchase returns yet</div>
+      <div style="font-size:12px;max-width:320px;margin:0 auto;line-height:1.6">
+        Purchases with <code style="background:var(--red-bg);color:var(--red);padding:1px 5px;border-radius:4px">payment_status = returned</code> will appear here.<br>
+        Click <b>New Return</b> above to mark an existing purchase as returned.
+      </div>
+    </td></tr>`;
+  } else {
+    tbody.innerHTML = purchaseReturns.map((r,i) => `<tr style="animation:fadeUp .3s ease ${i*45}ms both">
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${r.id}</span></td>
     <td><span class="mono" style="color:var(--text-soft);font-size:11.5px">${r.poId}</span></td>
     <td style="font-weight:600">${r.supplier}</td>
     <td style="font-size:12.5px">${r.product}</td>
     <td class="mono">${r.qty}</td>
     <td><span class="mono" style="font-weight:700;color:var(--red)">৳${r.creditAmt.toFixed(2)}</span></td>
-    <td style="font-size:12px;color:var(--text-soft)">${r.reason}</td>
+    <td style="font-size:12px;color:var(--text-soft)">${r.date}</td>
     <td>${statusBadge(r.status)}</td>
     <td><div class="act-group">
       <button class="act-btn" title="View" onclick="viewPurchaseReturn(purchaseReturns[${i}])">${svgIcon(eyeSvg,12)}</button>
       <button class="act-btn" title="Print" onclick="printPurchaseReturn(purchaseReturns[${i}])">${svgIcon(printSvg,12)}</button>
     </div></td>
   </tr>`).join('');
-  const pending  = purchaseReturns.filter(r=>r.status==='Pending').length;
-  const approved = purchaseReturns.filter(r=>r.status==='Approved').length;
-  const tc = document.getElementById('pr-total-count');
-  const pc = document.getElementById('pr-pending-count');
-  const ac = document.getElementById('pr-approved-count');
-  if(tc) tc.textContent = purchaseReturns.length;
-  if(pc) pc.textContent = pending;
-  if(ac) ac.textContent = approved;
+  }
+  const totalCredit = purchaseReturns.reduce((s,r) => s + r.creditAmt, 0);
+  const lastDate    = purchaseReturns.length ? purchaseReturns[0].date : '—';
+  const tc  = document.getElementById('pr-total-count');
+  const ctl = document.getElementById('pr-credit-total');
+  const ld  = document.getElementById('pr-last-date');
+  const tbc = document.getElementById('pr-tab-count');
+  if(tc)  tc.textContent  = purchaseReturns.length;
+  if(ctl) ctl.textContent = '৳' + totalCredit.toLocaleString('en-IN', {minimumFractionDigits:2});
+  if(ld)  ld.textContent  = lastDate;
+  if(tbc) tbc.textContent = purchaseReturns.length;
 }
 function renderAnalytics(){
   const mxM=Math.max(...salesData.map(d=>d.sales));
@@ -884,45 +949,9 @@ document.getElementById('globalSearch').addEventListener('input',e=>{
 
 /* ── FINANCIAL SUMMARY — NET CARD ── */
 function renderFinancialSummary() {
-  // Parse the placeholder values from the DOM (backend will populate these ids)
-  const parse = id => {
-    const el = document.getElementById(id);
-    if (!el) return 0;
-    const raw = el.textContent.replace(/[৳,\s]/g, '');
-    return parseFloat(raw) || 0;
-  };
-
-  const totalSales  = parse('fin-total-sales');
-  const invoiceDue  = parse('fin-invoice-due');
-  const expense     = parse('fin-expense');
-  const net         = totalSales - invoiceDue - expense;
-
-  const netValEl      = document.getElementById('fin-net-val');
-  const netIconBox    = document.getElementById('fin-net-icon-box');
-  const netIcon       = document.getElementById('fin-net-icon');
-  const netAccent     = document.getElementById('fin-net-accent');
-
-  if (!netValEl) return;
-
-  const isPositive = net >= 0;
-  const color      = isPositive ? 'var(--mint)' : 'var(--red)';
-  const bgColor    = isPositive ? 'rgba(60,175,130,0.12)' : 'rgba(229,83,83,0.12)';
-
-  // Format with ৳ sign and 2 decimal places
-  const sign = isPositive ? '' : '-';
-  netValEl.textContent = `${sign}৳${Math.abs(net).toLocaleString('en-IN', {minimumFractionDigits:2})}`;
-  netValEl.style.color = color;
-  netIconBox.style.background = bgColor;
-  netAccent.style.background  = `linear-gradient(90deg,transparent,${color},transparent)`;
-
-  // Swap icon: trending-up for positive, trending-down for negative
-  if (isPositive) {
-    netIcon.setAttribute('stroke', 'var(--mint)');
-    netIcon.innerHTML = '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>';
-  } else {
-    netIcon.setAttribute('stroke', 'var(--red)');
-    netIcon.innerHTML = '<polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>';
-  }
+  // This is now handled by updateDashboardFinCards() in ml-supabase.js
+  // which reads directly from the recentSales and purchases arrays.
+  // This stub is kept for compatibility in case it's called elsewhere.
 }
 
 /* ── INIT ── */

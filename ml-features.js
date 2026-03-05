@@ -19,6 +19,121 @@ function _poAction(action, idx) {
   if (action === 'print')   printPurchaseOrder(po);
   if (action === 'edit')    editPurchaseOrder(po);
   if (action === 'confirm') confirmPO(po);
+  if (action === 'return')  _returnPurchase(po);
+}
+
+function _returnPurchase(po) {
+  if (!confirm(`Mark purchase ${po.id} as returned?\n\nThis will set its status to Returned and remove it from total purchases.`)) return;
+  markPurchaseAsReturned(po._dbId).then(res => {
+    if (res.success) {
+      toast(`Purchase ${po.id} marked as returned ✓`);
+      loadPurchases();
+      loadPurchaseReturns();
+    } else {
+      toast('Failed: ' + res.error, 'error');
+    }
+  });
+}
+
+/* ══════════════════════════════════
+   EDIT SALE
+══════════════════════════════════ */
+function editSale(sale) {
+  if (!sale) return;
+  const payOpts = ['Cash','bKash','Nagad','Card'].map(p =>
+    `<option value="${p}" ${sale.payment===p?'selected':''}>${p}</option>`
+  ).join('');
+  const statusOpts = ['Completed','Pending','Returned'].map(s =>
+    `<option value="${s}" ${sale.status===s?'selected':''}>${s}</option>`
+  ).join('');
+
+  openPanel(`
+    <div class="feat-hdr">
+      <div><h3>Edit Sale</h3><p style="font-family:monospace;color:var(--mint);font-size:11px">${sale.id}</p></div>
+      <button class="feat-close" onclick="closePanel()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="feat-body">
+      <div class="feat-info-grid">
+        <div class="feat-info-box" style="grid-column:span 2">
+          <div class="feat-info-lbl">Customer</div>
+          <div class="feat-info-val">${sale.customer}</div>
+        </div>
+        <div class="feat-info-box">
+          <div class="feat-info-lbl">Date</div>
+          <div class="feat-info-val" style="font-size:12px">${sale.date}</div>
+        </div>
+        <div class="feat-info-box">
+          <div class="feat-info-lbl">Total</div>
+          <div class="feat-info-val" style="color:var(--mint)">৳${sale.total.toLocaleString('en-IN',{minimumFractionDigits:2})}</div>
+        </div>
+      </div>
+      <div class="feat-divider"></div>
+      <div class="feat-row">
+        <div class="feat-field">
+          <label>Payment Method</label>
+          <select id="es-payment">${payOpts}</select>
+        </div>
+        <div class="feat-field">
+          <label>Status</label>
+          <select id="es-status">${statusOpts}</select>
+        </div>
+      </div>
+      <div id="es-return-warning" style="display:${sale.status==='Returned'?'none':'none'};margin-top:8px;padding:10px 12px;background:var(--red-bg);border-radius:8px;font-size:12px;color:var(--red)">
+        ⚠️ Setting status to <b>Returned</b> will remove this sale from revenue totals.
+      </div>
+    </div>
+    <div class="feat-footer">
+      <button class="btn btn-outline" onclick="closePanel()">Cancel</button>
+      <button class="btn btn-mango" onclick="_saveSaleEdit('${sale._dbId}','${sale.id}')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save Changes
+      </button>
+    </div>
+  `, '460px');
+
+  // Show warning when Returned is selected
+  requestAnimationFrame(() => {
+    const sel = document.getElementById('es-status');
+    const warn = document.getElementById('es-return-warning');
+    if (sel && warn) sel.addEventListener('change', () => {
+      warn.style.display = sel.value === 'Returned' ? '' : 'none';
+    });
+  });
+}
+
+async function _saveSaleEdit(dbId, displayId) {
+  const payment = document.getElementById('es-payment').value;
+  const status  = document.getElementById('es-status').value;
+
+  const paymentStatusMap = {
+    'Completed': 'paid',
+    'Pending':   'pending',
+    'Returned':  'returned',
+  };
+  const paymentTypeMap = {
+    'Cash':  'cash',
+    'bKash': 'bkash',
+    'Nagad': 'nagad',
+    'Card':  'card',
+  };
+
+  closePanel();
+
+  try {
+    const { error } = await db.from('sales').update({
+      payment_status: paymentStatusMap[status]  || 'paid',
+      payment_type:   paymentTypeMap[payment] || 'cash',
+    }).eq('id', dbId);
+    if (error) throw error;
+    toast(`Sale ${displayId} updated ✓`);
+    loadSales();
+    loadSalesReturns();
+    loadDashboardStats();
+  } catch (err) {
+    toast('Failed to save: ' + err.message, 'error');
+  }
 }
 
 function printPurchaseOrder(po) {
@@ -1447,115 +1562,112 @@ function printPurchaseReturn(r) {
    NEW RETURN MODALS
 ══════════════════════════════════ */
 function openNewSalesReturn() {
+  // Build options from existing non-returned sales
+  const eligible = (recentSales || []).filter(s => s.status !== 'Returned');
+  const saleOptions = eligible.length
+    ? eligible.map(s => `<option value="${s._dbId}">${s.id} — ${s.customer} — ৳${(s.total||0).toLocaleString('en-IN')}</option>`).join('')
+    : '<option value="">No eligible sales found</option>';
+
   openPanel(`
     <div class="feat-hdr">
-      <div><h3>New Sales Return</h3><p>Record a customer return</p></div>
+      <div><h3>New Sales Return</h3><p>Mark a sale as returned</p></div>
       <button class="feat-close" onclick="closePanel()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
     <div class="feat-body">
-      <div class="feat-row">
-        <div class="feat-field"><label>Original Invoice ID</label><input id="nsr-inv" placeholder="INV-2024-XXXX"></div>
-        <div class="feat-field"><label>Customer Name</label><input id="nsr-cust" placeholder="e.g. Rafiq Ahmed"></div>
+      <div class="feat-field">
+        <label>Select Sale to Return</label>
+        <select id="nsr-sale-id" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12.5px">
+          <option value="">— Choose a sale —</option>
+          ${saleOptions}
+        </select>
       </div>
-      <div class="feat-row">
-        <div class="feat-field"><label>Product Name</label><input id="nsr-prod" placeholder="e.g. Nike Air Max 270"></div>
-        <div class="feat-field"><label>Qty Returned</label><input id="nsr-qty" type="number" min="1" value="1"></div>
+      <div class="feat-field" style="margin-top:4px">
+        <label>Reason <span style="color:var(--text-faint)">(optional)</span></label>
+        <input id="nsr-reason" placeholder="e.g. Damaged, Wrong item, Customer changed mind…">
       </div>
-      <div class="feat-row">
-        <div class="feat-field"><label>Refund Amount (৳)</label><input id="nsr-amt" type="number" step="0.01" placeholder="0.00"></div>
-        <div class="feat-field"><label>Status</label>
-          <select id="nsr-status"><option>Pending</option><option>Processed</option></select>
-        </div>
+      <div style="margin-top:12px;padding:10px 12px;background:var(--mango-bg);border-radius:8px;font-size:12px;color:var(--mango-dk)">
+        ⚠️ This will mark the selected sale's status as <b>Returned</b> in the database.
       </div>
-      <div class="feat-field"><label>Reason</label><input id="nsr-reason" placeholder="e.g. Wrong size, Damaged, etc."></div>
     </div>
     <div class="feat-footer">
       <button class="btn btn-outline" onclick="closePanel()">Cancel</button>
       <button class="btn btn-mango" onclick="_addSalesReturn()">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Add Return
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+        Mark as Returned
       </button>
     </div>
-  `, '520px');
+  `, '480px');
 }
 
 function _addSalesReturn() {
-  const inv    = document.getElementById('nsr-inv').value.trim();
-  const cust   = document.getElementById('nsr-cust').value.trim();
-  const prod   = document.getElementById('nsr-prod').value.trim();
-  const qty    = parseInt(document.getElementById('nsr-qty').value) || 1;
-  const amt    = parseFloat(document.getElementById('nsr-amt').value) || 0;
-  const status = document.getElementById('nsr-status').value;
-  const reason = document.getElementById('nsr-reason').value.trim();
-  if (!inv || !cust || !prod) { toast('Invoice, customer and product are required', 'error'); return; }
-  const newR = {
-    id: 'SR-' + String(salesReturns.length + 1).padStart(3, '0'),
-    invoiceId: inv, customer: cust, product: prod,
-    qty, refundAmt: amt, reason, status,
-    date: new Date().toISOString().split('T')[0],
-  };
-  salesReturns.unshift(newR);
+  const saleId = document.getElementById('nsr-sale-id').value;
+  if (!saleId) { toast('Please select a sale to return', 'error'); return; }
   closePanel();
-  renderSalesReturns();
-  toast('Sales return ' + newR.id + ' recorded');
+  markSaleAsReturned(saleId).then(res => {
+    if (res.success) {
+      toast('Sale marked as returned ✓');
+      loadSales();
+      loadSalesReturns();
+    } else {
+      toast('Failed to update: ' + res.error, 'error');
+    }
+  });
 }
 
 function openNewPurchaseReturn() {
+  const eligible = (purchases || []).filter(p => p.status !== 'Returned');
+  const poOptions = eligible.length
+    ? eligible.map(p => `<option value="${p._dbId}">${p.id} — ${p.supplier} — ৳${(p.total||0).toLocaleString('en-IN')}</option>`).join('')
+    : '<option value="">No eligible purchases found</option>';
+
   openPanel(`
     <div class="feat-hdr">
-      <div><h3>New Purchase Return</h3><p>Return items to supplier</p></div>
+      <div><h3>New Purchase Return</h3><p>Mark a purchase as returned to supplier</p></div>
       <button class="feat-close" onclick="closePanel()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
     <div class="feat-body">
-      <div class="feat-row">
-        <div class="feat-field"><label>PO Number</label><input id="npr-po" placeholder="PO-2024-XXXX"></div>
-        <div class="feat-field"><label>Supplier Name</label><input id="npr-supp" placeholder="e.g. TechWorld Distributors"></div>
+      <div class="feat-field">
+        <label>Select Purchase Order to Return</label>
+        <select id="npr-purchase-id" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12.5px">
+          <option value="">— Choose a purchase —</option>
+          ${poOptions}
+        </select>
       </div>
-      <div class="feat-row">
-        <div class="feat-field"><label>Product Name</label><input id="npr-prod" placeholder="e.g. Sony WH-1000XM5"></div>
-        <div class="feat-field"><label>Qty Returned</label><input id="npr-qty" type="number" min="1" value="1"></div>
+      <div class="feat-field" style="margin-top:4px">
+        <label>Reason <span style="color:var(--text-faint)">(optional)</span></label>
+        <input id="npr-reason" placeholder="e.g. Wrong item, Damaged on delivery, Quality issue…">
       </div>
-      <div class="feat-row">
-        <div class="feat-field"><label>Credit Amount (৳)</label><input id="npr-amt" type="number" step="0.01" placeholder="0.00"></div>
-        <div class="feat-field"><label>Status</label>
-          <select id="npr-status"><option>Pending</option><option>Approved</option></select>
-        </div>
+      <div style="margin-top:12px;padding:10px 12px;background:var(--mango-bg);border-radius:8px;font-size:12px;color:var(--mango-dk)">
+        ⚠️ This will mark the selected purchase status as <b>Returned</b> in the database.
       </div>
-      <div class="feat-field"><label>Reason</label><input id="npr-reason" placeholder="e.g. Wrong model, Damaged on delivery, etc."></div>
     </div>
     <div class="feat-footer">
       <button class="btn btn-outline" onclick="closePanel()">Cancel</button>
       <button class="btn btn-mango" onclick="_addPurchaseReturn()">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Add Return
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3.51"/></svg>
+        Mark as Returned
       </button>
     </div>
-  `, '520px');
+  `, '480px');
 }
 
 function _addPurchaseReturn() {
-  const po     = document.getElementById('npr-po').value.trim();
-  const supp   = document.getElementById('npr-supp').value.trim();
-  const prod   = document.getElementById('npr-prod').value.trim();
-  const qty    = parseInt(document.getElementById('npr-qty').value) || 1;
-  const amt    = parseFloat(document.getElementById('npr-amt').value) || 0;
-  const status = document.getElementById('npr-status').value;
-  const reason = document.getElementById('npr-reason').value.trim();
-  if (!po || !supp || !prod) { toast('PO number, supplier and product are required', 'error'); return; }
-  const newR = {
-    id: 'PR-' + String(purchaseReturns.length + 1).padStart(3, '0'),
-    poId: po, supplier: supp, product: prod,
-    qty, creditAmt: amt, reason, status,
-    date: new Date().toISOString().split('T')[0],
-  };
-  purchaseReturns.unshift(newR);
+  const purchaseId = document.getElementById('npr-purchase-id').value;
+  if (!purchaseId) { toast('Please select a purchase to return', 'error'); return; }
   closePanel();
-  renderPurchaseReturns();
-  toast('Purchase return ' + newR.id + ' recorded');
+  markPurchaseAsReturned(purchaseId).then(res => {
+    if (res.success) {
+      toast('Purchase marked as returned ✓');
+      loadPurchases();
+      loadPurchaseReturns();
+    } else {
+      toast('Failed to update: ' + res.error, 'error');
+    }
+  });
 }
 
 /* ══════════════════════════════════
