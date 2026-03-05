@@ -1,6 +1,7 @@
 /* ── DATA ── */
 const salesData=[{month:'Jan',sales:42000,purchases:28000,profit:14000},{month:'Feb',sales:38000,purchases:25000,profit:13000},{month:'Mar',sales:55000,purchases:31000,profit:24000},{month:'Apr',sales:47000,purchases:27000,profit:20000},{month:'May',sales:63000,purchases:35000,profit:28000},{month:'Jun',sales:58000,purchases:33000,profit:25000},{month:'Jul',sales:72000,purchases:40000,profit:32000},{month:'Aug',sales:69000,purchases:38000,profit:31000},{month:'Sep',sales:81000,purchases:44000,profit:37000},{month:'Oct',sales:76000,purchases:42000,profit:34000},{month:'Nov',sales:94000,purchases:52000,profit:42000},{month:'Dec',sales:110000,purchases:61000,profit:49000}];
 const weeklyData=[{day:'Mon',sales:8200},{day:'Tue',sales:6800},{day:'Wed',sales:9400},{day:'Thu',sales:7200},{day:'Fri',sales:11800},{day:'Sat',sales:14200},{day:'Sun',sales:5600}];
+const yearlyData=[];
 const categoryData=[{name:'Electronics',value:35,color:'#f5a623'},{name:'Clothing',value:25,color:'#3caf82'},{name:'Food & Bev.',value:20,color:'#4a85e8'},{name:'Home & Living',value:12,color:'#8b6be8'},{name:'Others',value:8,color:'#a8c5b8'}];
 const products=[
   {id:'PRD-001',name:'Sony WH-1000XM5',category:'Electronics',sku:'SON-WH1000XM5-BLK',stock:48,minStock:10,price:399.99,cost:220,supplier:'TechWorld Distributors',status:'In Stock',
@@ -106,11 +107,11 @@ const fmt = n => n.toLocaleString('en-IN',{minimumFractionDigits:2});
 
 /* ── NAV ── */
 const pageCfg = {
-  dashboard:  {title:'Dashboard',  sub:'Tuesday, 24 February 2026', act:'New Sale'},
+  dashboard:  {title:'Dashboard',  sub:'', act:'New Sale'},
   products:   {title:'Products',   sub:'8 total products',           act:'Add Product'},
   categories: {title:'Categories', sub:'Manage product categories',  act:'Add Category'},
   warehouses: {title:'Warehouses', sub:'Storage locations',          act:'Add Warehouse'},
-  adjustments:{title:'Adjustments',sub:'Manual stock corrections',   act:'New Adjustment'},
+
   sales:      {title:'Sales',      sub:'Manage all transactions',    act:'New Sale'},
   purchases:  {title:'Purchases',  sub:'Purchase orders',            act:'New PO'},
   'sales-returns':   {title:'Sales Returns',    sub:'Customer returns & refunds', act:'New Return'},
@@ -122,6 +123,26 @@ const pageCfg = {
   invoices:   {title:'Invoices',   sub:'All issued invoices',        act:'New Invoice'},
   settings:   {title:'Settings',   sub:'System preferences',         act:null},
 };
+
+/* ── REAL-TIME CLOCK for dashboard subtitle ── */
+function _updateDashClock() {
+  const el = document.getElementById('topbar-sub');
+  // Only update if we're on the dashboard
+  const isActive = document.getElementById('page-dashboard')?.classList.contains('active');
+  if (!el || !isActive) return;
+  const now  = new Date();
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const hh = h % 12 || 12;
+  const mm = String(m).padStart(2,'0');
+  const ss = String(s).padStart(2,'0');
+  el.textContent = `${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()} · ${hh}:${mm}:${ss} ${ampm}`;
+}
+setInterval(_updateDashClock, 1000);
+_updateDashClock();
+
 
 function navigate(page) {
   document.querySelectorAll('.page-section').forEach(s=>s.classList.remove('active'));
@@ -135,13 +156,25 @@ function navigate(page) {
   const cfg=pageCfg[page]||{title:page,sub:'',act:null};
   document.getElementById('topbar-title').textContent=cfg.title;
   document.getElementById('topbar-sub').textContent=cfg.sub;
-  const btn=document.getElementById('topActionBtn');
-  if(cfg.act){btn.style.display='';btn.childNodes[1]&&(btn.childNodes[1].textContent=' '+cfg.act);}
-  else btn.style.display='none';
+
+  // Show/hide top action buttons based on current page
+  const btnSale    = document.getElementById('topBtnSale');
+  const btnPO      = document.getElementById('topBtnPO');
+  const btnProduct = document.getElementById('topBtnProduct');
+  const showSale    = ['dashboard','sales','invoices'].includes(page);
+  const showPO      = ['dashboard','purchases'].includes(page);
+  const showProduct = ['dashboard','products','categories'].includes(page);
+  if (btnSale)    btnSale.style.display    = showSale    ? '' : 'none';
+  if (btnPO)      btnPO.style.display      = showPO      ? '' : 'none';
+  if (btnProduct) btnProduct.style.display = showProduct ? '' : 'none';
   window.scrollTo(0,0);
   /* Refresh Purchase & Sell Report when navigating to it */
   if ((page === 'Purchase and Sell Report' || page === 'purchase-sell-report') && typeof loadSalesPurchaseReport === 'function') {
     loadSalesPurchaseReport();
+  }
+  if (page === 'dashboard' && typeof loadChartData === 'function') {
+    loadDashboardStats();
+    loadChartData();
   }
 }
 document.querySelectorAll('.nav-item[data-page]').forEach(n=>n.addEventListener('click',()=>navigate(n.dataset.page)));
@@ -162,9 +195,11 @@ function setChartView(v){
   chartView=v;
   document.getElementById('chartMonthly').classList.toggle('active',v==='monthly');
   document.getElementById('chartWeekly').classList.toggle('active',v==='weekly');
-  // show/hide legend items for series only relevant in monthly
+  const yearlyBtn = document.getElementById('chartYearly');
+  if (yearlyBtn) yearlyBtn.classList.toggle('active', v==='yearly');
+  const showAll = v==='monthly'||v==='yearly';
   document.querySelectorAll('.legend-item[data-series="purchases"], .legend-item[data-series="profit"]').forEach(el=>{
-    el.style.display = v==='monthly' ? '' : 'none';
+    el.style.display = showAll ? '' : 'none';
   });
   renderRevenueChart();
 }
@@ -184,10 +219,11 @@ function renderRevenueChart(){
   svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
 
   const isMonthly = chartView === 'monthly';
-  const data = isMonthly ? salesData : weeklyData;
-  const labelKey = isMonthly ? 'month' : 'day';
+  const isYearly  = chartView === 'yearly';
+  const data = isMonthly ? salesData : isYearly ? (yearlyData.length ? yearlyData : salesData) : weeklyData;
+  const labelKey = isMonthly ? 'month' : isYearly ? 'year' : 'day';
 
-  const seriesCfg = isMonthly ? [
+  const seriesCfg = (isMonthly || isYearly) ? [
     {key:'sales',    color:'#3caf82', label:'Sales'},
     {key:'purchases',color:'#4a85e8', label:'Purchases'},
     {key:'profit',   color:'#f5a623', label:'Profit'},
@@ -211,8 +247,9 @@ function renderRevenueChart(){
   activeSeries.forEach(s => {
     defs += `
       <linearGradient id="grad_${s.key}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%"   stop-color="${s.color}" stop-opacity="0.18"/>
-        <stop offset="100%" stop-color="${s.color}" stop-opacity="0.01"/>
+        <stop offset="0%"   stop-color="${s.color}" stop-opacity="0.55"/>
+        <stop offset="60%"  stop-color="${s.color}" stop-opacity="0.18"/>
+        <stop offset="100%" stop-color="${s.color}" stop-opacity="0.02"/>
       </linearGradient>`;
   });
   defs += `</defs>`;
@@ -260,7 +297,7 @@ function renderRevenueChart(){
     const areaPath = linePath + ` L ${pts[pts.length-1][0]},${bottom} L ${pts[0][0]},${bottom} Z`;
 
     paths += `<path d="${areaPath}" fill="url(#grad_${s.key})" class="chart-area-fill" style="animation:fadeUp .5s ease both"/>`;
-    paths += `<path d="${linePath}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chart-line" style="stroke-dasharray:1000;stroke-dashoffset:1000;animation:drawLine .9s ease forwards"/>`;
+    paths += `<path d="${linePath}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="chart-line" style="stroke-dasharray:1000;stroke-dashoffset:1000;animation:drawLine .9s ease forwards;filter:drop-shadow(0 0 4px ${s.color}88)"/>`;
   });
 
   // hover dots (invisible, shown on hover)
@@ -444,20 +481,87 @@ function renderRecentSales(){
 }
 
 function renderStockAlerts(){
-  const low=products.filter(p=>p.stock<=p.minStock);
-  document.getElementById('stockAlerts').innerHTML=low.map(p=>{
-    const pct=p.stock===0?0:Math.min(100,(p.stock/p.minStock)*100);
-    const sc=p.stock===0?'var(--red)':'var(--mango-dk)';
-    return `<div class="alert-item">
-      <div class="alert-row">
-        <div class="alert-prod-icon">${svgIcon(p.iconSvg,14)}</div>
-        <div style="flex:1;min-width:0"><div class="alert-pname">${p.name}</div><div class="alert-pcat">${p.category}</div></div>
-        <div style="text-align:right"><div class="alert-qty" style="color:${sc}">${p.stock}</div><div class="alert-min">/ ${p.minStock} min</div></div>
+  const outOfStock = products.filter(p => p.stock === 0);
+  const lowStock   = products.filter(p => p.stock > 0 && p.stock <= p.minStock);
+  const all        = [...outOfStock, ...lowStock];
+
+  // Update the side-panel alert list
+  const alertList = document.getElementById('stockAlerts');
+  if (alertList) {
+    if (all.length === 0) {
+      alertList.innerHTML = '<div style="text-align:center;color:var(--text-faint);font-size:12px;padding:18px 0">All items are well stocked ✓</div>';
+    } else {
+      alertList.innerHTML = all.map(p => {
+        const pct = p.stock === 0 ? 0 : Math.min(100, (p.stock / p.minStock) * 100);
+        const sc  = p.stock === 0 ? 'var(--red)' : 'var(--mango-dk)';
+        return `<div class="alert-item">
+          <div class="alert-row">
+            <div class="alert-prod-icon">${svgIcon(p.iconSvg,14)}</div>
+            <div style="flex:1;min-width:0"><div class="alert-pname">${p.name}</div><div class="alert-pcat">${p.category}</div></div>
+            <div style="text-align:right"><div class="alert-qty" style="color:${sc}">${p.stock}</div><div class="alert-min">/ ${p.minStock} min</div></div>
+          </div>
+          <div class="sbar" style="width:100%"><div class="sfill ${p.stock===0?'sr':'sm'}" style="width:${pct}%"></div></div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // Sync notification panel too
+  updateNotifPanel();
+}
+
+/* ── NOTIFICATION PANEL ── */
+function toggleNotifPanel() {
+  const panel = document.getElementById('notifPanel');
+  if (!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) updateNotifPanel();
+}
+
+function updateNotifPanel() {
+  const outOfStock = products.filter(p => p.stock === 0);
+  const lowStock   = products.filter(p => p.stock > 0 && p.stock <= p.minStock);
+  const all        = [...outOfStock, ...lowStock];
+
+  const dot   = document.getElementById('notifDot');
+  const count = document.getElementById('notifCount');
+  const list  = document.getElementById('notifList');
+  if (dot)   dot.style.display   = all.length > 0 ? '' : 'none';
+  if (count) count.textContent   = all.length;
+
+  if (!list) return;
+  if (all.length === 0) {
+    list.innerHTML = '<div style="padding:20px 16px;text-align:center;color:var(--text-faint);font-size:12px">✓ All items are well stocked</div>';
+    return;
+  }
+  list.innerHTML = all.map(p => {
+    const isOut = p.stock === 0;
+    const col   = isOut ? 'var(--red)' : 'var(--mango-dk)';
+    const tag   = isOut
+      ? `<span style="font-size:9.5px;background:rgba(229,83,83,.15);color:var(--red);padding:2px 6px;border-radius:20px;font-weight:700">Out of Stock</span>`
+      : `<span style="font-size:9.5px;background:rgba(245,166,35,.15);color:var(--mango-dk);padding:2px 6px;border-radius:20px;font-weight:700">Low Stock</span>`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--border);cursor:pointer" onclick="navigate('products');toggleNotifPanel()">
+      <div style="width:32px;height:32px;border-radius:8px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       </div>
-      <div class="sbar" style="width:100%"><div class="sfill ${p.stock===0?'sr':'sm'}" style="width:${pct}%"></div></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+        <div style="font-size:11px;color:var(--text-soft)">${p.category} · <span style="color:${col};font-weight:700">${p.stock}</span> left (min ${p.minStock})</div>
+      </div>
+      ${tag}
     </div>`;
   }).join('');
 }
+
+// Close notif panel when clicking outside
+document.addEventListener('click', e => {
+  const panel = document.getElementById('notifPanel');
+  const btn   = document.getElementById('notifBtn');
+  if (panel && btn && !panel.contains(e.target) && !btn.contains(e.target)) {
+    panel.style.display = 'none';
+  }
+});
 
 let pCatFilter='All', pStatFilter='All';
 function renderCatPills(){
@@ -650,15 +754,52 @@ function renderInvoices(){
 }
 
 function renderReports(){
-  const sm=[82,65,91,74,110,58,43];
-  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const mxS=Math.max(...sm);
-  document.getElementById('stockMovChart').innerHTML=sm.map((v,i)=>`<div class="bar-col"><div class="bseg bs-sales" style="height:${Math.round((v/mxS)*95)}px"></div><div class="bar-lbl">${days[i]}</div></div>`).join('');
+  // ── Top Trending Products (by total qty sold from recentSales) ──
+  const salesMap = {};
+  recentSales.forEach(s => {
+    (s.lineItems || []).forEach(li => {
+      if (!li.name) return;
+      if (!salesMap[li.name]) salesMap[li.name] = { name: li.name, qty: 0, revenue: 0 };
+      salesMap[li.name].qty     += li.qty     || 0;
+      salesMap[li.name].revenue += li.subtotal || 0;
+    });
+  });
+  const trending = Object.values(salesMap).sort((a,b) => b.qty - a.qty).slice(0, 5);
+  const trendEl = document.getElementById('trendingProdsReport');
+  if (trendEl) {
+    if (!trending.length) {
+      trendEl.innerHTML = '<div style="color:var(--text-faint);font-size:12px;padding:8px">No sales data yet</div>';
+    } else {
+      const mxQ = Math.max(trending[0].qty, 1);
+      trendEl.innerHTML = trending.map((p, i) => {
+        const medals = ['🥇','🥈','🥉','',''];
+        return `<div class="top-row">
+          <div class="top-icon-box" style="font-size:14px;display:flex;align-items:center;justify-content:center">${medals[i]||'#'+(i+1)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;margin-bottom:4px">${p.name}</div>
+            <div class="top-bar"><div class="top-fill" style="width:${(p.qty/mxQ)*100}%"></div></div>
+          </div>
+          <div style="text-align:right;min-width:60px">
+            <div class="top-val" style="font-size:11.5px">৳${p.revenue.toLocaleString('en-IN',{minimumFractionDigits:0})}</div>
+            <div style="font-size:10px;color:var(--text-faint)">${p.qty} sold</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // ── Revenue by Category ──
   const mxC=Math.max(...categoryData.map(d=>d.value));
-  document.getElementById('revCatChart').innerHTML=categoryData.map(d=>`<div class="bar-col"><div class="bseg" style="height:${Math.round((d.value/mxC)*95)}px;background:${d.color};border-radius:4px 4px 0 0"></div><div class="bar-lbl">${d.name.split(' ')[0]}</div></div>`).join('');
+  const revCatEl = document.getElementById('revCatChart');
+  if (revCatEl) revCatEl.innerHTML=categoryData.map(d=>`<div class="bar-col"><div class="bseg" style="height:${Math.round((d.value/mxC)*95)}px;background:${d.color};border-radius:4px 4px 0 0"></div><div class="bar-lbl">${d.name.split(' ')[0]}</div></div>`).join('');
+
+  // ── Top 5 Products by Value ──
   const top=[...products].sort((a,b)=>(b.stock*b.price)-(a.stock*a.price)).slice(0,5);
-  const mxV=top[0].stock*top[0].price;
-  document.getElementById('topProdsReport').innerHTML=top.map(p=>`<div class="top-row">
+  const topEl = document.getElementById('topProdsReport');
+  if (!topEl) return;
+  if(!top.length){topEl.innerHTML='<div style="color:var(--text-faint);font-size:12px;padding:8px">No products</div>';return;}
+  const mxV=Math.max(top[0].stock*top[0].price, 1);
+  topEl.innerHTML=top.map(p=>`<div class="top-row">
     <div class="top-icon-box">${svgIcon(p.iconSvg,13)}</div>
     <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;margin-bottom:4px">${p.name}</div><div class="top-bar"><div class="top-fill" style="width:${((p.stock*p.price)/mxV)*100}%"></div></div></div>
     <div class="top-val">৳${(p.stock*p.price).toFixed(0)}</div>
@@ -734,7 +875,7 @@ function openModal(){document.getElementById('modalOverlay').classList.add('open
 function closeModal(){document.getElementById('modalOverlay').classList.remove('open');}
 function submitProduct(e){e.preventDefault();closeModal();}
 document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal();});
-document.getElementById('topActionBtn').addEventListener('click',openModal);
+// topActionBtn replaced by individual buttons
 
 /* ── GLOBAL SEARCH ── */
 document.getElementById('globalSearch').addEventListener('input',e=>{
@@ -794,6 +935,8 @@ renderPurchases(); renderCustomers(); renderSuppliers(); renderInvoices();
 renderSalesReturns(); renderPurchaseReturns();
 renderReports(); renderAnalytics();
 renderFinancialSummary();
+// Show correct buttons for initial dashboard page
+navigate('dashboard');
 
 // Charts render after layout is ready
 requestAnimationFrame(()=>{

@@ -207,6 +207,8 @@ nav { flex:1; overflow-y:auto; padding:14px 10px; }
 .btn-primary:hover { background:var(--mint-dark); transform:translateY(-1px); box-shadow:0 4px 14px var(--mint-glow); }
 .btn-mango { background:var(--mango); color:#fff; box-shadow:0 2px 10px var(--mango-glow); }
 .btn-mango:hover { background:var(--mango-dk); transform:translateY(-1px); }
+.btn-purple { background:#8b6be8; color:#fff; box-shadow:0 2px 10px rgba(139,107,232,0.35); }
+.btn-purple:hover { background:#7a5ad4; transform:translateY(-1px); }
 .btn-outline { background:transparent; color:var(--text-mid); border:1.5px solid var(--border); }
 .btn-outline:hover { background:var(--surface2); }
 
@@ -225,6 +227,7 @@ nav { flex:1; overflow-y:auto; padding:14px 10px; }
 
 /* ── STAT CARDS ── */
 .stat-grid { display:grid; gap:14px; margin-bottom:18px; }
+.g2 { grid-template-columns:repeat(2,1fr); }
 .g4 { grid-template-columns:repeat(4,1fr); }
 .g3 { grid-template-columns:repeat(3,1fr); }
 .g2 { grid-template-columns:repeat(2,1fr); }
@@ -359,7 +362,7 @@ tbody tr:hover .act-group { opacity:1; }
 .fselect:focus { border-color:var(--mint); box-shadow:0 0 0 3px var(--mint-glow); }
 
 /* ── CHARTS ── */
-.dash-charts { display:grid; grid-template-columns:1fr 276px; gap:14px; margin-bottom:14px; }
+.dash-charts { display:grid; grid-template-columns:1fr; gap:14px; margin-bottom:14px; }
 .dash-panels { display:grid; grid-template-columns:1fr 330px; gap:14px; }
 
 .chart-area { padding:0 20px 18px; }

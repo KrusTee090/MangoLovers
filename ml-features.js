@@ -1970,7 +1970,8 @@ function _nsiLineHtml(itemOptions) {
 }
 
 function openNewSale() {
-  const customerOptions = customers.map(c => `<option value="${c.id}" data-name="${c.name}">${c.name}</option>`).join('');
+  const customerOptions = customers
+    .map(c => `<option value="${c.id||''}" data-name="${c.name}">${c.name}</option>`).join('');
   const itemOptions = products.map(p => `<option value="${p.id}" data-price="${p.price||0}" data-name="${p.name}">${p.name}</option>`).join('');
 
   openPanel(`
@@ -2132,7 +2133,7 @@ function _nsiRecalcTotal() {
 }
 
 async function _submitNewSale() {
-  const customerId    = document.getElementById('nsi-customer').value || null;
+  const customerId = document.getElementById('nsi-customer').value || null;
   const paymentMethod = document.getElementById('nsi-payment').value;
   const paymentStatus = document.getElementById('nsi-status').value;
 
@@ -2159,13 +2160,14 @@ async function _submitNewSale() {
     const { data: saleRows, error: saleErr } = await db
       .from('sales')
       .insert([{
-        customer_id:    customerId,
+        customer_id:    customerId || null,
         payment_type:   paymentMethod,
         payment_status: paymentStatus,
         sale_date:      new Date().toISOString(),
       }])
       .select();
     if (saleErr) throw saleErr;
+    if (!saleRows || saleRows.length === 0) throw new Error('Sale insert returned no data — check Supabase RLS policies allow SELECT after INSERT on sales table.');
     const saleId = saleRows[0].id;
 
     // 2. Insert sale_items rows
@@ -2179,7 +2181,16 @@ async function _submitNewSale() {
     const { error: itemsErr } = await db.from('sale_items').insert(itemRows);
     if (itemsErr) throw itemsErr;
 
+    // 3. Decrement stock for each sold item
+    for (const li of lineItems) {
+      const product = products.find(p => p.id === li.itemId);
+      const currentStock = product?.stock ?? 0;
+      const newStock = Math.max(0, currentStock - li.qty);
+      await db.from('items').update({ stock_quantity: newStock }).eq('id', li.itemId);
+    }
+
     await loadSales();
+    await loadProducts();
     closePanel();
     toast('Sale recorded successfully');
   } catch (err) {

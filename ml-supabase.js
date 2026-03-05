@@ -57,44 +57,165 @@ function showBanner(type, html, autoDismiss = 0) {
    ═══════════════════════════════════════════════════════════ */
 async function loadDashboardStats() {
   try {
-    // Total products
-    const { count: totalProducts } = await db
-      .from('items').select('*', { count: 'exact', head: true });
+    const now   = new Date();
+    const today = now.toISOString().split('T')[0];
+    const yest  = new Date(now); yest.setDate(yest.getDate() - 1);
+    const yesterday = yest.toISOString().split('T')[0];
 
-    // Low stock items (stock_quantity <= 10)
-    const { count: lowStockCount } = await db
-      .from('items').select('*', { count: 'exact', head: true })
-      .lte('stock_quantity', 10);
-
-    // Today's sales total
-    const today = new Date().toISOString().split('T')[0];
+    // Today's revenue
     const { data: todaySales } = await db
       .from('sales')
       .select('id, sale_items!sale_items_sale_id_fkey(subtotal)')
       .gte('sale_date', `${today}T00:00:00`)
       .lte('sale_date', `${today}T23:59:59`);
-    const todayRevenue = (todaySales || []).reduce((sum, s) => {
-      const items = Array.isArray(s.sale_items) ? s.sale_items : [];
-      return sum + items.reduce((a, si) => a + parseFloat(si.subtotal || 0), 0);
-    }, 0);
+    const todayRevenue = (todaySales || []).reduce((sum, s) =>
+      sum + (Array.isArray(s.sale_items) ? s.sale_items : []).reduce((a, si) => a + parseFloat(si.subtotal || 0), 0), 0);
 
-    // Pending orders
-    const { count: pendingOrders } = await db
-      .from('sales').select('*', { count: 'exact', head: true })
-      .eq('payment_status', 'pending');
+    // Yesterday's revenue for % comparison
+    const { data: yesterdaySales } = await db
+      .from('sales')
+      .select('id, sale_items!sale_items_sale_id_fkey(subtotal)')
+      .gte('sale_date', `${yesterday}T00:00:00`)
+      .lte('sale_date', `${yesterday}T23:59:59`);
+    const yesterdayRevenue = (yesterdaySales || []).reduce((sum, s) =>
+      sum + (Array.isArray(s.sale_items) ? s.sale_items : []).reduce((a, si) => a + parseFloat(si.subtotal || 0), 0), 0);
 
-    // Update stat cards
-    const statVals = document.querySelectorAll('.stat-val');
-    if (statVals[0]) statVals[0].textContent = `৳${todayRevenue.toLocaleString('en-IN', { minimumFractionDigits: 0 })}`;
-    if (statVals[1]) statVals[1].textContent = (totalProducts || 0).toLocaleString();
-    if (statVals[2]) statVals[2].textContent = (pendingOrders || 0);
-    if (statVals[3]) statVals[3].textContent = (lowStockCount || 0);
+    // Low stock
+    const { count: lowStockCount } = await db
+      .from('items').select('*', { count: 'exact', head: true }).lte('stock_quantity', 10);
 
-    // Update page config subtitle
+    // Total products for subtitle
+    const { count: totalProducts } = await db
+      .from('items').select('*', { count: 'exact', head: true });
+
+    // Update Today's Revenue card
+    const revEl = document.getElementById('dash-today-revenue');
+    if (revEl) revEl.textContent = `৳${todayRevenue.toLocaleString('en-IN', { minimumFractionDigits: 0 })}`;
+
+    // Update % pill
+    const pill   = document.getElementById('dash-rev-pill');
+    const pctEl  = document.getElementById('dash-rev-pct');
+    const arrowEl= document.getElementById('dash-rev-arrow');
+    if (pctEl && pill) {
+      if (yesterdayRevenue === 0) {
+        pctEl.textContent = todayRevenue > 0 ? 'New' : '—';
+        pill.className = 'cpill cup';
+      } else {
+        const pct = ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100;
+        const up  = pct >= 0;
+        pctEl.textContent = Math.abs(pct).toFixed(1) + '%';
+        pill.className = up ? 'cpill cup' : 'cpill cdn';
+        if (arrowEl) arrowEl.innerHTML = up
+          ? '<polyline points="18 15 12 9 6 15"/>'
+          : '<polyline points="6 9 12 15 18 9"/>';
+      }
+    }
+
+    // Update Low Stock card
+    const lsEl  = document.getElementById('dash-low-stock');
+    const lsSubEl = document.getElementById('dash-low-sub');
+    if (lsEl)  lsEl.textContent = (lowStockCount || 0);
+    if (lsSubEl) lsSubEl.textContent = (lowStockCount || 0) === 0 ? 'All items well stocked' : 'items need restocking';
+
     pageCfg.products.sub = `${totalProducts || 0} total products`;
 
   } catch (err) {
     console.error('Dashboard stats error:', err);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LOAD CHART DATA FROM DB
+   ═══════════════════════════════════════════════════════════ */
+async function loadChartData() {
+  try {
+    const now = new Date();
+    const pad = n => String(n).padStart(2,'0');
+
+    // ── WEEKLY: last 7 days ──
+    const weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - 6);
+    const { data: weekSales } = await db
+      .from('sales')
+      .select('sale_date, sale_items!sale_items_sale_id_fkey(subtotal)')
+      .gte('sale_date', weekStart.toISOString());
+    const { data: weekPurch } = await db
+      .from('supplier_purchases')
+      .select('purchase_date, total_amount')
+      .gte('purchase_date', weekStart.toISOString());
+
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const weekMap = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now); d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      weekMap[key] = { day: days[d.getDay()], sales: 0, purchases: 0 };
+    }
+    (weekSales || []).forEach(s => {
+      const key = s.sale_date.split('T')[0];
+      if (weekMap[key]) weekMap[key].sales += (Array.isArray(s.sale_items)?s.sale_items:[]).reduce((a,si)=>a+parseFloat(si.subtotal||0),0);
+    });
+    (weekPurch || []).forEach(p => {
+      const key = p.purchase_date.split('T')[0];
+      if (weekMap[key]) weekMap[key].purchases += parseFloat(p.total_amount||0);
+    });
+    const newWeeklyData = Object.values(weekMap).map(d => ({ ...d, profit: d.sales - d.purchases }));
+
+    // ── MONTHLY: each month of current year ──
+    const year = now.getFullYear();
+    const { data: yearSales } = await db
+      .from('sales')
+      .select('sale_date, sale_items!sale_items_sale_id_fkey(subtotal)')
+      .gte('sale_date', `${year}-01-01T00:00:00`)
+      .lte('sale_date', `${year}-12-31T23:59:59`);
+    const { data: yearPurch } = await db
+      .from('supplier_purchases')
+      .select('purchase_date, total_amount')
+      .gte('purchase_date', `${year}-01-01T00:00:00`)
+      .lte('purchase_date', `${year}-12-31T23:59:59`);
+
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const monthMap = {};
+    for (let m = 0; m < 12; m++) monthMap[m] = { month: monthNames[m], sales: 0, purchases: 0 };
+    (yearSales || []).forEach(s => {
+      const m = new Date(s.sale_date).getMonth();
+      if (monthMap[m] !== undefined) monthMap[m].sales += (Array.isArray(s.sale_items)?s.sale_items:[]).reduce((a,si)=>a+parseFloat(si.subtotal||0),0);
+    });
+    (yearPurch || []).forEach(p => {
+      const m = new Date(p.purchase_date).getMonth();
+      if (monthMap[m] !== undefined) monthMap[m].purchases += parseFloat(p.total_amount||0);
+    });
+    const newMonthlyData = Object.values(monthMap).map(d => ({ ...d, profit: d.sales - d.purchases }));
+
+    // ── YEARLY: last 5 years ──
+    const { data: allSales } = await db
+      .from('sales')
+      .select('sale_date, sale_items!sale_items_sale_id_fkey(subtotal)')
+      .gte('sale_date', `${year-4}-01-01T00:00:00`);
+    const { data: allPurch } = await db
+      .from('supplier_purchases')
+      .select('purchase_date, total_amount')
+      .gte('purchase_date', `${year-4}-01-01T00:00:00`);
+
+    const yearMap = {};
+    for (let y = year-4; y <= year; y++) yearMap[y] = { year: String(y), sales: 0, purchases: 0 };
+    (allSales || []).forEach(s => {
+      const y = new Date(s.sale_date).getFullYear();
+      if (yearMap[y]) yearMap[y].sales += (Array.isArray(s.sale_items)?s.sale_items:[]).reduce((a,si)=>a+parseFloat(si.subtotal||0),0);
+    });
+    (allPurch || []).forEach(p => {
+      const y = new Date(p.purchase_date).getFullYear();
+      if (yearMap[y]) yearMap[y].purchases += parseFloat(p.total_amount||0);
+    });
+    const newYearlyData = Object.values(yearMap).map(d => ({ ...d, profit: d.sales - d.purchases }));
+
+    // Push into global arrays used by chart
+    salesData.length = 0;     newMonthlyData.forEach(d => salesData.push(d));
+    weeklyData.length = 0;    newWeeklyData.forEach(d => weeklyData.push(d));
+    yearlyData.length = 0;    newYearlyData.forEach(d => yearlyData.push(d));
+
+    renderRevenueChart();
+  } catch (err) {
+    console.error('Chart data error:', err);
   }
 }
 
@@ -444,7 +565,17 @@ async function savePurchaseToDB(formData) {
       .select();
     if (poErr) throw poErr;
 
+    // Increment stock for every line item in the purchase
+    for (const li of (formData.lineItems || [])) {
+      if (!li.itemId || li.qty <= 0) continue;
+      const product = products.find(p => p.id === li.itemId);
+      const currentStock = product?.stock ?? 0;
+      const newStock = currentStock + li.qty;
+      await db.from('items').update({ stock_quantity: newStock }).eq('id', li.itemId);
+    }
+
     await loadPurchases();
+    await loadProducts();
     return { success: true };
   } catch (err) {
     console.error('Save purchase error:', err);
@@ -590,6 +721,46 @@ function submitProduct(e) {
 /* ═══════════════════════════════════════════════════════════
    BOOT  –  called after DOM is ready
    ═══════════════════════════════════════════════════════════ */
+async function loadTrendingProducts() {
+  try {
+    const { data, error } = await db
+      .from('sale_items')
+      .select('quantity, items!item_id(id, name)');
+    if (error) throw error;
+
+    const map = {};
+    (data || []).forEach(row => {
+      const item = Array.isArray(row.items) ? row.items[0] : row.items;
+      if (!item?.name) return;
+      if (!map[item.name]) map[item.name] = { name: item.name, qty: 0 };
+      map[item.name].qty += parseFloat(row.quantity) || 0;
+    });
+
+    const trending = Object.values(map).sort((a, b) => b.qty - a.qty).slice(0, 5);
+    const el = document.getElementById('trendingProdsReport');
+    if (!el) return;
+    if (!trending.length) {
+      el.innerHTML = '<div style="color:var(--text-faint);font-size:12px;padding:8px">No sales data yet</div>';
+      return;
+    }
+    const mxQ = Math.max(trending[0].qty, 1);
+    const medals = ['\u{1F947}','\u{1F948}','\u{1F949}','4th','5th'];
+    el.innerHTML = trending.map((p, i) => `
+      <div class="top-row">
+        <div class="top-icon-box" style="font-size:14px;display:flex;align-items:center;justify-content:center">${medals[i]}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;margin-bottom:4px">${p.name}</div>
+          <div class="top-bar"><div class="top-fill" style="width:${(p.qty/mxQ)*100}%"></div></div>
+        </div>
+        <div style="text-align:right;min-width:55px">
+          <div style="font-size:11.5px;font-weight:700;color:var(--mint)">${p.qty} sold</div>
+        </div>
+      </div>`).join('');
+  } catch (err) {
+    console.error('Trending products error:', err);
+  }
+}
+
 async function initSupabase() {
   const ok = await checkSupabaseConnection();
   if (!ok) return;
@@ -603,6 +774,11 @@ async function initSupabase() {
     ['purchases',  loadPurchases],
     ['dashboard',  loadDashboardStats],
   ];
+
+  // Load chart data from DB
+  try { await loadChartData(); } catch(e) { console.error('Chart load error:', e); }
+  // Load trending products
+  try { await loadTrendingProducts(); } catch(e) { console.error('Trending error:', e); }
 
   for (const [name, fn] of loaders) {
     try {
