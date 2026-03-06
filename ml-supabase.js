@@ -568,7 +568,6 @@ async function savePurchaseToDB(formData) {
         supplier_id:    supplierId,
         item_id:        firstItem?.itemId || null,
         quantity:       firstItem?.qty    || null,
-        unit_cost:      firstItem?.unitPrice || null, // ✨ ADD THIS LINE
         total_amount:   parseFloat(formData.total) || 0,
         payment_status: formData.paymentStatus || 'pending',
         purchase_date:  new Date().toISOString(),
