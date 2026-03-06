@@ -131,20 +131,21 @@ async function loadDashboardStats() {
    ═══════════════════════════════════════════════════════════ */
 async function loadChartData() {
   try {
-    const now = new Date();
-    const pad = n => String(n).padStart(2,'0');
+    const now  = new Date();
+    const year = now.getFullYear();
 
-    // ── WEEKLY: last 7 days ──
+    // ── WEEKLY: last 7 days — use sales.total_amount directly ──
     const weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - 6);
-    const { data: weekSales } = await db
-      .from('sales')
-      .select('sale_date, sale_items!sale_items_sale_id_fkey(subtotal)')
-      .neq('payment_status', 'returned')
-      .gte('sale_date', weekStart.toISOString());
-    const { data: weekPurch } = await db
-      .from('supplier_purchases')
-      .select('purchase_date, total_amount')
-      .gte('purchase_date', weekStart.toISOString());
+    const [{ data: weekSales }, { data: weekPurch }] = await Promise.all([
+      db.from('sales')
+        .select('sale_date, total_amount')
+        .neq('payment_status', 'returned')
+        .gte('sale_date', weekStart.toISOString()),
+      db.from('supplier_purchases')
+        .select('purchase_date, total_amount')
+        .neq('payment_status', 'returned')
+        .gte('purchase_date', weekStart.toISOString()),
+    ]);
 
     const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     const weekMap = {};
@@ -155,68 +156,68 @@ async function loadChartData() {
     }
     (weekSales || []).forEach(s => {
       const key = s.sale_date.split('T')[0];
-      if (weekMap[key]) weekMap[key].sales += (Array.isArray(s.sale_items)?s.sale_items:[]).reduce((a,si)=>a+parseFloat(si.subtotal||0),0);
+      if (weekMap[key]) weekMap[key].sales += parseFloat(s.total_amount || 0);
     });
     (weekPurch || []).forEach(p => {
       const key = p.purchase_date.split('T')[0];
-      if (weekMap[key]) weekMap[key].purchases += parseFloat(p.total_amount||0);
+      if (weekMap[key]) weekMap[key].purchases += parseFloat(p.total_amount || 0);
     });
     const newWeeklyData = Object.values(weekMap).map(d => ({ ...d, profit: d.sales - d.purchases }));
 
     // ── MONTHLY: each month of current year ──
-    const year = now.getFullYear();
-    const { data: yearSales } = await db
-      .from('sales')
-      .select('sale_date, sale_items!sale_items_sale_id_fkey(subtotal)')
-      .neq('payment_status', 'returned')
-      .gte('sale_date', `${year}-01-01T00:00:00`)
-      .lte('sale_date', `${year}-12-31T23:59:59`);
-    const { data: yearPurch } = await db
-      .from('supplier_purchases')
-      .select('purchase_date, total_amount')
-      .gte('purchase_date', `${year}-01-01T00:00:00`)
-      .lte('purchase_date', `${year}-12-31T23:59:59`);
+    const [{ data: yearSales }, { data: yearPurch }] = await Promise.all([
+      db.from('sales')
+        .select('sale_date, total_amount')
+        .neq('payment_status', 'returned')
+        .gte('sale_date', `${year}-01-01T00:00:00`)
+        .lte('sale_date', `${year}-12-31T23:59:59`),
+      db.from('supplier_purchases')
+        .select('purchase_date, total_amount')
+        .neq('payment_status', 'returned')
+        .gte('purchase_date', `${year}-01-01T00:00:00`)
+        .lte('purchase_date', `${year}-12-31T23:59:59`),
+    ]);
 
     const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const monthMap = {};
     for (let m = 0; m < 12; m++) monthMap[m] = { month: monthNames[m], sales: 0, purchases: 0 };
     (yearSales || []).forEach(s => {
       const m = new Date(s.sale_date).getMonth();
-      if (monthMap[m] !== undefined) monthMap[m].sales += (Array.isArray(s.sale_items)?s.sale_items:[]).reduce((a,si)=>a+parseFloat(si.subtotal||0),0);
+      if (monthMap[m] !== undefined) monthMap[m].sales += parseFloat(s.total_amount || 0);
     });
     (yearPurch || []).forEach(p => {
       const m = new Date(p.purchase_date).getMonth();
-      if (monthMap[m] !== undefined) monthMap[m].purchases += parseFloat(p.total_amount||0);
+      if (monthMap[m] !== undefined) monthMap[m].purchases += parseFloat(p.total_amount || 0);
     });
     const newMonthlyData = Object.values(monthMap).map(d => ({ ...d, profit: d.sales - d.purchases }));
 
     // ── YEARLY: last 5 years ──
-    const { data: allSales } = await db
-      .from('sales')
-      .select('sale_date, sale_items!sale_items_sale_id_fkey(subtotal)')
-      .neq('payment_status', 'returned')
-      .gte('sale_date', `${year-4}-01-01T00:00:00`);
-    const { data: allPurch } = await db
-      .from('supplier_purchases')
-      .select('purchase_date, total_amount')
-      .gte('purchase_date', `${year-4}-01-01T00:00:00`);
+    const [{ data: allSales }, { data: allPurch }] = await Promise.all([
+      db.from('sales')
+        .select('sale_date, total_amount')
+        .neq('payment_status', 'returned')
+        .gte('sale_date', `${year-4}-01-01T00:00:00`),
+      db.from('supplier_purchases')
+        .select('purchase_date, total_amount')
+        .neq('payment_status', 'returned')
+        .gte('purchase_date', `${year-4}-01-01T00:00:00`),
+    ]);
 
     const yearMap = {};
     for (let y = year-4; y <= year; y++) yearMap[y] = { year: String(y), sales: 0, purchases: 0 };
     (allSales || []).forEach(s => {
       const y = new Date(s.sale_date).getFullYear();
-      if (yearMap[y]) yearMap[y].sales += (Array.isArray(s.sale_items)?s.sale_items:[]).reduce((a,si)=>a+parseFloat(si.subtotal||0),0);
+      if (yearMap[y]) yearMap[y].sales += parseFloat(s.total_amount || 0);
     });
     (allPurch || []).forEach(p => {
       const y = new Date(p.purchase_date).getFullYear();
-      if (yearMap[y]) yearMap[y].purchases += parseFloat(p.total_amount||0);
+      if (yearMap[y]) yearMap[y].purchases += parseFloat(p.total_amount || 0);
     });
     const newYearlyData = Object.values(yearMap).map(d => ({ ...d, profit: d.sales - d.purchases }));
 
-    // Push into global arrays used by chart
-    salesData.length = 0;     newMonthlyData.forEach(d => salesData.push(d));
-    weeklyData.length = 0;    newWeeklyData.forEach(d => weeklyData.push(d));
-    yearlyData.length = 0;    newYearlyData.forEach(d => yearlyData.push(d));
+    salesData.length = 0;  newMonthlyData.forEach(d => salesData.push(d));
+    weeklyData.length = 0; newWeeklyData.forEach(d => weeklyData.push(d));
+    yearlyData.length = 0; newYearlyData.forEach(d => yearlyData.push(d));
 
     renderRevenueChart();
   } catch (err) {
@@ -270,24 +271,13 @@ async function loadProducts() {
 
 async function saveProduct(formData) {
   try {
-    // items.id is VARCHAR(20) with no default — generate next numeric ID
-    const { data: maxRow } = await db
-      .from('items')
-      .select('id')
-      .order('id', { ascending: false })
-      .limit(1);
-    const lastId  = maxRow?.[0]?.id ? parseInt(maxRow[0].id) : 1000;
-    const newId   = String(isNaN(lastId) ? Date.now() % 100000 : lastId + 1);
-
     const payload = {
-      id:             newId,
       name:           formData.name,
-      category:       formData.category || 'Uncategorized',
-      cost_price:     parseFloat(formData.cost)  || 0,
-      selling_price:  parseFloat(formData.price) || 0,
-      stock_quantity: parseInt(formData.stock)   || 0,
-      uom:            formData.uom  || null,
-      barcode:        formData.sku  || null,
+      category:       formData.category,
+      cost_price:     parseFloat(formData.cost)     || 0,
+      selling_price:  parseFloat(formData.price)    || 0,
+      stock_quantity: parseInt(formData.stock)      || 0,
+      barcode:        formData.sku || null,
       description:    formData.description || null,
     };
     const { data, error } = await db.from('items').insert([payload]).select();
@@ -475,7 +465,7 @@ async function loadPurchases() {
     const { data, error } = await db
         .from('supplier_purchases')
         .select(`
-          id, total_amount, purchase_date, payment_status, paid_amount,unit_cost,
+          id, total_amount, purchase_date, payment_status, paid_amount,
           quantity, item_id,
           suppliers(name),
           items!item_id(id, name, uom)
@@ -584,7 +574,7 @@ async function savePurchaseToDB(formData) {
         supplier_id:    supplierId,
         item_id:        firstItem?.itemId || null,
         quantity:       firstItem?.qty    || null,
-        unit_cost:      firstItem?.unitPrice || null,
+        paid_amount:    parseFloat(formData.total) || 0,
         total_amount:   parseFloat(formData.total) || 0,
         payment_status: formData.paymentStatus || 'pending',
         purchase_date:  new Date().toISOString(),
@@ -955,7 +945,7 @@ async function loadPurchaseReturns() {
     const { data, error } = await db
       .from('supplier_purchases')
       .select(`
-        id, total_amount, purchase_date, payment_status,unit_cost,
+        id, total_amount, purchase_date, payment_status, paid_amount,
         suppliers(name),
         items!item_id(id, name, uom),
         quantity
@@ -1055,37 +1045,25 @@ function setupRealtimeSubscriptions() {
    ═══════════════════════════════════════════════════════════ */
 function submitProduct(e) {
   e.preventDefault();
+  const form = e.target;
+  const inputs = form.querySelectorAll('input, select');
   const formData = {
-    name:     document.getElementById('ap-name')?.value?.trim(),
-    sku:      document.getElementById('ap-sku')?.value?.trim(),
-    category: document.getElementById('ap-category')?.value || 'Uncategorized',
-    price:    document.getElementById('ap-price')?.value,
-    cost:     document.getElementById('ap-cost')?.value,
-    stock:    document.getElementById('ap-stock')?.value,
-    uom:      document.getElementById('ap-uom')?.value?.trim(),
+    name:        inputs[0]?.value,
+    sku:         inputs[1]?.value,
+    category:    inputs[2]?.value,
+    price:       inputs[3]?.value,
+    cost:        inputs[4]?.value,
+    stock:       inputs[5]?.value,
+    minStock:    inputs[6]?.value,
   };
-  if (!formData.name) { showBanner('error', '❌ Product name is required'); return; }
   saveProduct(formData).then(result => {
     if (result.success) {
       closeModal();
-      e.target.reset();
-      populateAddProductCategories();
-      showBanner('success', '✅ Product saved!', 3000);
+      showBanner('success', '✅ Product saved to Supabase!', 3000);
     } else {
       showBanner('error', `❌ Failed to save: ${result.error}`);
     }
   });
-}
-
-/* Populate #ap-category from loaded products — called when modal opens */
-function populateAddProductCategories() {
-  const sel = document.getElementById('ap-category');
-  if (!sel) return;
-  const existing = sel.value; // preserve current selection if any
-  const cats = [...new Set(products.map(p => p.category).filter(c => c && c !== 'Uncategorized'))].sort();
-  sel.innerHTML = '<option value="Uncategorized">Uncategorized</option>'
-    + cats.map(c => `<option value="${c}">${c}</option>`).join('');
-  if (existing && [...sel.options].some(o => o.value === existing)) sel.value = existing;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1990,7 +1968,7 @@ async function loadStockReport() {
 
     /* ── 4. Purchase items in range (non-returned purchases) ── */
     let purQ = db.from('supplier_purchase_items')
-      .select('item_id, quantity, unit_cost, subtotal, supplier_purchases!inner(purchase_date, payment_status)')
+      .select('item_id, quantity, supplier_purchases!inner(purchase_date, payment_status)')
       .neq('supplier_purchases.payment_status', 'returned');
     if (from) purQ = purQ.gte('supplier_purchases.purchase_date', `${from}T00:00:00`);
     if (to)   purQ = purQ.lte('supplier_purchases.purchase_date', `${to}T23:59:59`);
@@ -2238,7 +2216,7 @@ function printStockReport() {
   </div>
   <table>
     <thead><tr>
-      <th>Item ID</th><th>Name</th><th style="text-align:center">uom</th>
+      <th>Item ID</th><th>Name</th><th style="text-align:center">UoM</th>
       <th style="text-align:center">Stock In</th><th style="text-align:center">Stock Out</th>
       <th style="text-align:center">Returns</th><th style="text-align:center">Net</th>
       <th style="text-align:right">Current Stock</th><th style="text-align:right">Stock Value</th>

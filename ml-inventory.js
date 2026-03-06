@@ -1,7 +1,6 @@
 /* ── DATA ── */
-// Chart data — filled from Supabase by loadChartData()
-const salesData=[];
-const weeklyData=[];
+const salesData=[{month:'Jan',sales:42000,purchases:28000,profit:14000},{month:'Feb',sales:38000,purchases:25000,profit:13000},{month:'Mar',sales:55000,purchases:31000,profit:24000},{month:'Apr',sales:47000,purchases:27000,profit:20000},{month:'May',sales:63000,purchases:35000,profit:28000},{month:'Jun',sales:58000,purchases:33000,profit:25000},{month:'Jul',sales:72000,purchases:40000,profit:32000},{month:'Aug',sales:69000,purchases:38000,profit:31000},{month:'Sep',sales:81000,purchases:44000,profit:37000},{month:'Oct',sales:76000,purchases:42000,profit:34000},{month:'Nov',sales:94000,purchases:52000,profit:42000},{month:'Dec',sales:110000,purchases:61000,profit:49000}];
+const weeklyData=[{day:'Mon',sales:8200},{day:'Tue',sales:6800},{day:'Wed',sales:9400},{day:'Thu',sales:7200},{day:'Fri',sales:11800},{day:'Sat',sales:14200},{day:'Sun',sales:5600}];
 const yearlyData=[];
 const categoryData=[{name:'Electronics',value:35,color:'#f5a623'},{name:'Clothing',value:25,color:'#3caf82'},{name:'Food & Bev.',value:20,color:'#4a85e8'},{name:'Home & Living',value:12,color:'#8b6be8'},{name:'Others',value:8,color:'#a8c5b8'}];
 const products=[
@@ -250,20 +249,15 @@ function renderRevenueChart(){
 
   const isMonthly = chartView === 'monthly';
   const isYearly  = chartView === 'yearly';
-  const raw = isMonthly ? salesData : isYearly ? (yearlyData.length ? yearlyData : salesData) : weeklyData;
-  // Show placeholder if no DB data yet
-  if (!raw.length) {
-    svgEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-size="13" fill="#a8c5b8" font-family="DM Sans,sans-serif">Loading chart data…</text>';
-    return;
-  }
-  const data = raw;
+  const data = isMonthly ? salesData : isYearly ? (yearlyData.length ? yearlyData : salesData) : weeklyData;
   const labelKey = isMonthly ? 'month' : isYearly ? 'year' : 'day';
 
-  // All views show Sales, Purchases and Net (profit)
-  const seriesCfg = [
-    {key:'sales',    color:'#3caf82', label:'Total Sales'},
-    {key:'purchases',color:'#4a85e8', label:'Total Purchase'},
-    {key:'profit',   color:'#f5a623', label:'Net'},
+  const seriesCfg = (isMonthly || isYearly) ? [
+    {key:'sales',    color:'#3caf82', label:'Sales'},
+    {key:'purchases',color:'#4a85e8', label:'Purchases'},
+    {key:'profit',   color:'#f5a623', label:'Profit'},
+  ] : [
+    {key:'sales', color:'#3caf82', label:'Sales'},
   ];
 
   const activeSeries = seriesCfg.filter(s => !hiddenSeries.has(s.key));
@@ -901,10 +895,7 @@ function renderAnalytics(){
 
 
 /* ── MODAL ── */
-function openModal(){
-  document.getElementById('modalOverlay').classList.add('open');
-  if (typeof populateAddProductCategories === 'function') populateAddProductCategories();
-}
+function openModal(){document.getElementById('modalOverlay').classList.add('open');}
 function closeModal(){document.getElementById('modalOverlay').classList.remove('open');}
 function submitProduct(e){e.preventDefault();closeModal();}
 document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal();});
