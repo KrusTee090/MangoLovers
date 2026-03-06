@@ -116,6 +116,7 @@ const pageCfg = {
   sales:      {title:'Sales',      sub:'Manage all transactions',    act:'New Sale'},
   purchases:  {title:'Purchases',  sub:'Purchase orders',            act:'New PO'},
   returns:    {title:'Returns',    sub:'Sales & purchase returns',   act:null},
+  expenses:   {title:'Expenses',   sub:'All recorded expenses',       act:'New Expense'},
   customers:  {title:'Customers',  sub:'5 registered customers',     act:'Add Customer'},
   suppliers:  {title:'Suppliers',  sub:'6 registered suppliers',     act:'Add Supplier'},
   analytics:  {title:'Analytics',    sub:'Performance insights',       act:'Export'},
@@ -196,6 +197,9 @@ function navigate(page) {
   }
   if (page === 'analytics' && typeof loadAnalytics === 'function') {
     loadAnalytics(_anRange || 'week');
+  }
+  if (page === 'expenses' && typeof loadExpenses === 'function') {
+    loadExpenses();
   }
   if (page === 'dashboard' && typeof loadChartData === 'function') {
     loadDashboardStats();
@@ -538,9 +542,11 @@ function renderStockAlerts(){
 /* ── NOTIFICATION PANEL ── */
 function toggleNotifPanel() {
   const panel = document.getElementById('notifPanel');
+  const btn   = document.getElementById('notifBtn');
   if (!panel) return;
   const isOpen = panel.style.display !== 'none';
   panel.style.display = isOpen ? 'none' : 'block';
+  if (btn) btn.classList.toggle('active', !isOpen);
   if (!isOpen) updateNotifPanel();
 }
 
@@ -557,7 +563,7 @@ function updateNotifPanel() {
 
   if (!list) return;
   if (all.length === 0) {
-    list.innerHTML = '<div style="padding:20px 16px;text-align:center;color:var(--text-faint);font-size:12px">✓ All items are well stocked</div>';
+    list.innerHTML = '<div style="padding:20px 16px;text-align:center;color:#7ecfa4;font-size:12px">✓ All items are well stocked</div>';
     return;
   }
   list.innerHTML = all.map(p => {
@@ -566,13 +572,13 @@ function updateNotifPanel() {
     const tag   = isOut
       ? `<span style="font-size:9.5px;background:rgba(229,83,83,.15);color:var(--red);padding:2px 6px;border-radius:20px;font-weight:700">Out of Stock</span>`
       : `<span style="font-size:9.5px;background:rgba(245,166,35,.15);color:var(--mango-dk);padding:2px 6px;border-radius:20px;font-weight:700">Low Stock</span>`;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--border);cursor:pointer" onclick="navigate('products');toggleNotifPanel()">
-      <div style="width:32px;height:32px;border-radius:8px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid #1a5c38;cursor:pointer" onclick="navigate('products');toggleNotifPanel()">
+      <div style="width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       </div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
-        <div style="font-size:11px;color:var(--text-soft)">${p.category} · <span style="color:${col};font-weight:700">${p.stock}</span> left (min ${p.minStock})</div>
+        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d4f5e2">${p.name}</div>
+        <div style="font-size:11px;color:#7ecfa4">${p.category} · <span style="color:${col};font-weight:700">${p.stock}</span> left (min ${p.minStock})</div>
       </div>
       ${tag}
     </div>`;
@@ -585,6 +591,7 @@ document.addEventListener('click', e => {
   const btn   = document.getElementById('notifBtn');
   if (panel && btn && !panel.contains(e.target) && !btn.contains(e.target)) {
     panel.style.display = 'none';
+    btn.classList.remove('active');
   }
 });
 
@@ -752,7 +759,7 @@ function renderCustomers(filter=''){
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:9px">
           <div class="cust-avatar">${c.name[0]}</div>
-          <div><div style="font-size:13px;font-weight:700">${c.name}</div><div class="mono" style="font-size:9.5px;color:var(--text-faint)">${c.id}</div></div>
+          <div><div style="font-size:13px;font-weight:700">${c.name}</div></div>
         </div>
         ${statusBadge(c.status)}
       </div>
@@ -771,7 +778,7 @@ document.getElementById('customerSearch').addEventListener('input',e=>renderCust
 
 function renderSuppliers(){
   document.getElementById('suppliersTbody').innerHTML=suppliersData.map((s,i)=>`<tr style="animation:fadeUp .3s ease ${i*45}ms both">
-    <td><div><div style="font-weight:600">${s.name}</div><div class="mono" style="font-size:9.5px;color:var(--text-faint)">${s.id}</div></div></td>
+    <td><div><div style="font-weight:600">${s.name}</div></div></td>
     <td style="font-size:12px;color:var(--text-soft)">${s.address || '—'}</td>
     <td style="font-size:12px;color:var(--text-soft)">${s.contact}</td>
     <td><span class="mono" style="font-weight:700">৳${s.totalPurchases.toLocaleString()}</span></td>
@@ -909,6 +916,209 @@ function renderFinancialSummary() {
 /* ── INIT ── */
 // Remove CSS fade-up from dashboard cards so JS handles them
 document.querySelectorAll('#page-dashboard .fade-up').forEach(el=>el.classList.remove('fade-up'));
+
+/* ══ EXPENSES ══ */
+let expensesData = [];
+let _expFilter   = 'all';
+
+function expQuickFilter(range, el) {
+  _expFilter = range;
+  document.querySelectorAll('[id^="exp-pill-"]').forEach(p => p.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderExpenses();
+}
+
+function renderExpenses() {
+  const tbody   = document.getElementById('expensesTbody');
+  if (!tbody) return;
+  const query   = (document.getElementById('expSearch')?.value || '').toLowerCase();
+  const now     = new Date();
+  const pad     = n => String(n).padStart(2,'0');
+  const today   = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+  const monStart= `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
+  const monDayOffset = (now.getDay()+6)%7;
+  const weekD   = new Date(now); weekD.setDate(now.getDate()-monDayOffset);
+  const weekStart = `${weekD.getFullYear()}-${pad(weekD.getMonth()+1)}-${pad(weekD.getDate())}`;
+
+  let rows = expensesData.filter(e => {
+    if (query && !(e.description||'').toLowerCase().includes(query)) return false;
+    if (_expFilter === 'today') return e.expense_date === today;
+    if (_expFilter === 'week')  return e.expense_date >= weekStart;
+    if (_expFilter === 'month') return e.expense_date >= monStart;
+    return true;
+  });
+
+  // Update stat cards
+  const fmt = v => '৳' + parseFloat(v||0).toLocaleString('en-IN',{minimumFractionDigits:2});
+  const totalAll   = expensesData.reduce((s,e) => s+parseFloat(e.amount||0), 0);
+  const totalMonth = expensesData.filter(e=>e.expense_date>=monStart).reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const totalToday = expensesData.filter(e=>e.expense_date===today).reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const setEl = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+  setEl('exp-total-count',  expensesData.length);
+  setEl('exp-total-amount', fmt(totalAll));
+  setEl('exp-this-month',   fmt(totalMonth));
+  setEl('exp-today',        fmt(totalToday));
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-soft);padding:28px">No expenses found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((e,i) => `
+    <tr style="animation:fadeUp .3s ease ${i*30}ms both">
+      <td style="color:var(--text-soft);font-size:12px">${e.expense_date || '—'}</td>
+      <td style="font-weight:500">${e.description || '<span style="color:var(--text-faint);font-style:italic">No description</span>'}</td>
+      <td style="text-align:right"><span class="mono" style="font-weight:700;color:var(--red)">৳${parseFloat(e.amount||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</span></td>
+      <td style="text-align:right">
+        <div class="act-group">
+          <button class="act-btn" title="Delete" onclick="deleteExpense(${e.id})" style="color:var(--red)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function openNewExpense() {
+  openPanel(`
+    <div class="feat-hdr">
+      <div><h3>New Expense</h3><p>Record an outgoing expense</p></div>
+      <button class="feat-close" onclick="closePanel()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="feat-body">
+      <div class="feat-row">
+        <div class="feat-field">
+          <label>Date</label>
+          <input type="date" id="exp-date" value="${new Date().toISOString().split('T')[0]}"
+            style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font-size:13px;font-family:inherit">
+        </div>
+        <div class="feat-field">
+          <label>Amount (৳)</label>
+          <input type="number" id="exp-amount" min="0" step="0.01" placeholder="0.00"
+            style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font-size:13px;font-family:inherit">
+        </div>
+      </div>
+      <div class="feat-field" style="margin-top:10px">
+        <label>Description</label>
+        <textarea id="exp-desc" rows="3" placeholder="What was this expense for?"
+          style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>
+      </div>
+    </div>
+    <div class="feat-footer">
+      <button class="btn btn-outline" onclick="closePanel()">Cancel</button>
+      <button class="btn btn-mango" onclick="_submitExpense()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Save Expense
+      </button>
+    </div>
+  `, '460px');
+}
+
+async function _submitExpense() {
+  const date   = document.getElementById('exp-date')?.value;
+  const amount = parseFloat(document.getElementById('exp-amount')?.value);
+  const desc   = document.getElementById('exp-desc')?.value?.trim();
+  if (!date)        { toast('Please select a date', 'error'); return; }
+  if (!amount || amount <= 0) { toast('Please enter a valid amount', 'error'); return; }
+  const btn = document.querySelector('.feat-footer .btn-mango');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  const result = typeof saveExpenseToDB === 'function'
+    ? await saveExpenseToDB({ expense_date: date, amount, description: desc || null })
+    : { success: false, error: 'saveExpenseToDB not found' };
+  if (result.success) {
+    closePanel();
+    toast('Expense saved successfully ✓');
+    loadExpenses();
+  } else {
+    toast('Error: ' + result.error, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Expense'; }
+  }
+}
+
+async function deleteExpense(id) {
+  if (!confirm('Delete this expense?')) return;
+  const result = typeof deleteExpenseFromDB === 'function'
+    ? await deleteExpenseFromDB(id)
+    : { success: false, error: 'deleteExpenseFromDB not found' };
+  if (result.success) {
+    toast('Expense deleted');
+    loadExpenses();
+  } else {
+    toast('Error: ' + result.error, 'error');
+  }
+}
+
+/* ══ PRINT & EXCEL UTILITIES ══ */
+function printTableSection(pageId, title) {
+  const page = document.getElementById(pageId);
+  if (!page) return;
+  const table = page.querySelector('table');
+  if (!table) return;
+  const win = window.open('', '_blank', 'width=900,height=700');
+  win.document.write(`<!DOCTYPE html><html><head>
+    <title>${title}</title>
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'DM Sans',Arial,sans-serif;color:#1a2e22;padding:32px;font-size:12px}
+      h1{font-size:20px;font-weight:800;margin-bottom:4px}
+      .sub{color:#6b8a74;font-size:11px;margin-bottom:20px}
+      table{width:100%;border-collapse:collapse}
+      th{background:#f0f6f2;padding:8px 12px;text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #d0e8dc}
+      td{padding:8px 12px;border-bottom:1px solid #eaf3ee;font-size:11.5px}
+      tr:last-child td{border-bottom:none}
+      .footer{text-align:center;color:#a8c5b8;font-size:10px;border-top:1px solid #e0ede7;padding-top:12px;margin-top:18px}
+      @media print{body{padding:16px}}
+    </style>
+  </head><body>
+    <div style="font-size:12px;font-weight:700;margin-bottom:2px">MangoLovers</div>
+    <h1>${title}</h1>
+    <div class="sub">Generated: ${new Date().toLocaleString()}</div>
+    ${table.outerHTML}
+    <div class="footer">MangoLovers Inventory System</div>
+    <script>window.onload=()=>window.print()<\/script>
+  </body></html>`);
+  win.document.close();
+}
+
+function exportTableAsCSV(tbodyId, filename, headers) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) { console.warn('exportTableAsCSV: tbody not found', tbodyId); return; }
+
+  // Scrape visible rows — strip badge/icon noise, keep plain text
+  const rows = Array.from(tbody.querySelectorAll('tr'))
+    .map(tr => Array.from(tr.querySelectorAll('td')).map(td => {
+      const raw = td.innerText.trim().replace(/[\r\n]+/g, ' ');
+      // Wrap in quotes and escape internal quotes
+      return '"' + raw.replace(/"/g, '""') + '"';
+    }))
+    .filter(r => r.length > 0);
+
+  if (rows.length === 0) { if (typeof toast === 'function') toast('No data to export', 'error'); return; }
+
+  const header = headers.map(h => '"' + h + '"').join(',');
+  const csv    = '\uFEFF' + [header, ...rows.map(r => r.join(','))].join('\r\n');
+  const blob   = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url    = URL.createObjectURL(blob);
+  const a      = document.createElement('a');
+  a.href       = url;
+  a.download   = filename.endsWith('.csv') ? filename : filename + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  if (typeof toast === 'function') toast('CSV exported: ' + a.download);
+}
+
+function exportReturnsAsCSV() {
+  const salesActive = document.getElementById('rtab-sales')?.classList.contains('active');
+  const tbodyId  = salesActive ? 'salesReturnsTbody' : 'purchaseReturnsTbody';
+  const filename = salesActive ? 'sales-returns.csv' : 'purchase-returns.csv';
+  const headers  = salesActive
+    ? ['Return ID','Invoice ID','Customer','Product','Qty','Refund','Date','Status']
+    : ['Return ID','PO ID','Supplier','Product','Qty','Amount','Date','Status'];
+  exportTableAsCSV(tbodyId, filename, headers);
+}
 
 renderRecentSales(); renderStockAlerts();
 renderProducts(); renderCatPills(); renderCategories(); renderSalesTable();

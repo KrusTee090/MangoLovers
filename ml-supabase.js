@@ -366,7 +366,7 @@ async function loadSales() {
     const { data, error } = await db
       .from('sales')
       .select(`
-        id, payment_type, payment_status, sale_date, paid_amount,
+        id, customer_id, payment_type, payment_status, sale_date, paid_amount,
         customers!customer_id(name),
         sale_items!sale_items_sale_id_fkey(
           id, quantity, unit_price, subtotal,
@@ -382,9 +382,15 @@ async function loadSales() {
     const payLabel = t => ({ bkash:'bKash', nagad:'Nagad', cash:'Cash', card:'Card' }[String(t).toLowerCase()] || t);
 
     const mapped = (data || []).map(row => {
-      // Safely handle customer object or array
+      // Resolve customer name — join result OR fallback to in-memory customers array
       const cust = Array.isArray(row.customers) ? row.customers[0] : row.customers;
-      const customerName = cust?.name || 'Walk-in';
+      let customerName = cust?.name || null;
+      if (!customerName && row.customer_id) {
+        // Fallback: look up in-memory customers array (handles race conditions & join gaps)
+        const found = customers.find(c => c.id === row.customer_id);
+        customerName = found?.name || null;
+      }
+      customerName = customerName || 'Walk-in';
 
       // Safely handle sale_items and nested items
       const sItems = Array.isArray(row.sale_items) ? row.sale_items : (row.sale_items ? [row.sale_items] : []);
@@ -561,13 +567,13 @@ async function savePurchaseToDB(formData) {
       : null;
 
     /* 3. Insert purchase row (no separate line-items table needed) */
-/* 3. Insert purchase row (no separate line-items table needed) */
     const { data: poRows, error: poErr } = await db
       .from('supplier_purchases')
       .insert([{
         supplier_id:    supplierId,
         item_id:        firstItem?.itemId || null,
         quantity:       firstItem?.qty    || null,
+        unit_cost:      firstItem?.unitPrice || null,
         total_amount:   parseFloat(formData.total) || 0,
         payment_status: formData.paymentStatus || 'pending',
         purchase_date:  new Date().toISOString(),
@@ -619,8 +625,8 @@ function updateDashboardFinCards() {
     .filter(p => p.status === 'Pending' || p.status === 'In Transit')
     .reduce((sum, p) => sum + (p.total || 0), 0);
 
-  // Expense — kept as 0 until expense module is built
-  const expense = 0;
+  // Expense — sum from expenses table
+  const expense = (typeof expensesData !== 'undefined' ? expensesData : []).reduce((s,e) => s + parseFloat(e.amount||0), 0);
 
   // Net = Total Sales − Expense (invoice due is receivable, not a deduction)
   const net = totalSales - expense;
@@ -662,12 +668,139 @@ function updateDashboardFinCards() {
    SALES & PURCHASE REPORT (Updated error checking)
    ═══════════════════════════════════════════════════════════ */
 
+let _psrFrom = null, _psrTo = null;
+
+function psrQuickFilter(range) {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  let from, to;
+  if (range === 'all')        { from = null; to = null; }
+  else if (range === 'today') { from = to = ymd(now); }
+  else if (range === 'week')  { const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay()+6)%7)); from = ymd(mon); to = ymd(now); }
+  else if (range === 'month') { from = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`; to = ymd(now); }
+  else if (range === 'year')  { from = `${now.getFullYear()}-01-01`; to = ymd(now); }
+  ['all','today','week','month','year'].forEach(k => {
+    const el = document.getElementById(`psr-pill-${k}`);
+    if (el) el.classList.toggle('active', k === range);
+  });
+  const fromEl = document.getElementById('psr-from');
+  const toEl   = document.getElementById('psr-to');
+  if (fromEl) fromEl.value = from || '';
+  if (toEl)   toEl.value   = to   || '';
+  _psrFrom = from; _psrTo = to;
+  loadSalesPurchaseReport();
+}
+
+function psrApplyFilter() {
+  _psrFrom = document.getElementById('psr-from')?.value || null;
+  _psrTo   = document.getElementById('psr-to')?.value   || null;
+  ['all','today','week','month','year'].forEach(k => {
+    const el = document.getElementById(`psr-pill-${k}`);
+    if (el) el.classList.remove('active');
+  });
+  loadSalesPurchaseReport();
+}
+
+function printPurchaseSaleReport() {
+  const from  = _psrFrom || '';
+  const to    = _psrTo   || '';
+  const range = (from && to) ? `${from} to ${to}` : 'All Time';
+  const getVal = id => document.getElementById(id)?.textContent || '৳ 0.00';
+  const row = (label, id, bold=false) =>
+    `<tr${bold ? ' style="font-weight:700"' : ''}><td>${label}</td><td style="text-align:right;font-family:monospace">${getVal(id)}</td></tr>`;
+  const tbodyEl = document.getElementById('psrTbody');
+  const tableRows = tbodyEl ? tbodyEl.innerHTML : '';
+  const win = window.open('', '_blank', 'width=860,height=700');
+  win.document.write(`<!DOCTYPE html><html><head>
+  <title>Purchase & Sale Report</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'DM Sans',Arial,sans-serif;color:#1a2e22;background:#fff;padding:40px;font-size:13px}
+    h1{font-size:22px;font-weight:800;margin-bottom:4px}
+    .sub{color:#6b8a74;font-size:12px;margin-bottom:28px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px}
+    .box{border:1px solid #e0ede7;border-radius:10px;overflow:hidden}
+    .box-title{background:#f7faf8;padding:10px 16px;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#4a6659;border-bottom:1px solid #e0ede7}
+    table{width:100%;border-collapse:collapse}
+    td{padding:9px 16px;border-bottom:1px solid #f0f6f2}
+    tr:last-child td{border-bottom:none}
+    .summary{border:2px solid #3caf82;border-radius:12px;padding:20px 24px;margin-bottom:24px}
+    .sum-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e0ede7}
+    .sum-row:last-child{border-bottom:none}
+    .sum-label{font-size:12px;color:#4a6659}
+    .sum-val{font-size:15px;font-weight:800;font-family:monospace}
+    .txn-table{width:100%;border-collapse:collapse;font-size:12px}
+    .txn-table th{background:#f7faf8;padding:8px 12px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e0ede7}
+    .txn-table td{padding:8px 12px;border-bottom:1px solid #f0f6f2}
+    .footer{text-align:center;color:#a8c5b8;font-size:11px;border-top:1px solid #e0ede7;padding-top:14px;margin-top:20px}
+    @media print{body{padding:20px}}
+  </style></head><body>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+    <div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:2px">MangoLovers</div>
+      <h1>Purchase &amp; Sale Report</h1>
+      <div class="sub">Period: ${range} &nbsp;·&nbsp; Generated: ${new Date().toLocaleString()}</div>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="box">
+      <div class="box-title">Purchases</div>
+      <table>
+        ${row('Total Purchase', 'totalPurchase', true)}
+        ${row('Purchase Including Tax', 'purchaseIncTax')}
+        ${row('Total Purchase Return Inc. Tax', 'purchaseReturnIncTax')}
+        ${row('Purchase Due', 'purchaseDue')}
+      </table>
+    </div>
+    <div class="box">
+      <div class="box-title">Sales</div>
+      <table>
+        ${row('Total Sale', 'totalSale', true)}
+        ${row('Sale Including Tax', 'saleIncTax')}
+        ${row('Total Sell Return Inc. Tax', 'saleReturnIncTax')}
+        ${row('Sale Due', 'saleDue')}
+      </table>
+    </div>
+  </div>
+  <div class="summary">
+    <div class="sum-row"><span class="sum-label">Sale − Purchase</span><span class="sum-val">${getVal('saleMinusPurchase')}</span></div>
+    <div class="sum-row"><span class="sum-label">Due Amount</span><span class="sum-val">${getVal('totalDueAmount')}</span></div>
+  </div>
+  <div class="box" style="margin-bottom:20px">
+    <div class="box-title">Transactions</div>
+    <table class="txn-table">
+      <thead><tr><th>Date</th><th>Reference</th><th>Type</th><th>Party</th><th>Amount</th><th>Status</th></tr></thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+  </div>
+  <div class="footer">MangoLovers Inventory System · Printed ${new Date().toLocaleString()}</div>
+  <script>window.onload=()=>window.print()<\/script>
+  </body></html>`);
+  win.document.close();
+}
+
 function loadSalesPurchaseReport() {
   try {
-    const totalSale     = recentSales.filter(r => r.status !== 'Returned').reduce((s, r) => s + (r.total || 0), 0);
-    const saleDue       = recentSales.filter(r => r.status === 'Pending').reduce((s, r) => s + (r.total || 0), 0);
-    const totalPurchase = purchases.filter(p => p.status !== 'Returned').reduce((s, p) => s + (p.total || 0), 0);
-    const purchaseDue   = purchases.filter(p => p.status === 'Pending' || p.status === 'In Transit').reduce((s, p) => s + (p.total || 0), 0);
+    const from = _psrFrom, to = _psrTo;
+    const inRange = date => {
+      if (!from && !to) return true;
+      const d = (date || '').split('T')[0];
+      if (from && d < from) return false;
+      if (to   && d > to)   return false;
+      return true;
+    };
+
+    const subEl = document.getElementById('psr-subtitle');
+    if (subEl) subEl.textContent = (from && to) ? `${from} to ${to}` : 'All transactions';
+
+    const filteredSales = recentSales.filter(r => inRange(r.date));
+    const filteredPurch = purchases.filter(p => inRange(p.date));
+
+    const totalSale     = filteredSales.filter(r => r.status !== 'Returned').reduce((s, r) => s + (r.total || 0), 0);
+    const saleDue       = filteredSales.filter(r => r.status === 'Pending').reduce((s, r) => s + (r.total || 0), 0);
+    const totalPurchase = filteredPurch.filter(p => p.status !== 'Returned').reduce((s, p) => s + (p.total || 0), 0);
+    const purchaseDue   = filteredPurch.filter(p => p.status === 'Pending' || p.status === 'In Transit').reduce((s, p) => s + (p.total || 0), 0);
 
     setText('totalPurchase',        totalPurchase);
     setText('purchaseIncTax',       totalPurchase);
@@ -695,7 +828,7 @@ function loadSalesPurchaseReport() {
       return `<span class="badge ${cls}">${label}</span>`;
     };
 
-    const saleRows = recentSales.map(s => ({
+    const saleRows = filteredSales.map(s => ({
       date: s.date || '—',
       ref:  `<span class="mono">${s.id}</span>`,
       type: `<span class="badge b-green" style="font-size:10px">Sale</span>`,
@@ -704,7 +837,7 @@ function loadSalesPurchaseReport() {
       status: s.status,
     }));
 
-    const purRows = purchases.map(p => ({
+    const purRows = filteredPurch.map(p => ({
       date: p.date || '—',
       ref:  `<span class="mono">${p.id}</span>`,
       type: `<span class="badge b-blue" style="font-size:10px">Purchase</span>`,
@@ -754,7 +887,7 @@ async function loadSalesReturns() {
     const { data, error } = await db
       .from('sales')
       .select(`
-        id, payment_type, payment_status, sale_date, paid_amount,
+        id, customer_id, payment_type, payment_status, sale_date, paid_amount,
         customers!customer_id(name),
         sale_items!sale_items_sale_id_fkey(
           quantity, unit_price, subtotal,
@@ -770,6 +903,12 @@ async function loadSalesReturns() {
     salesReturns.length = 0;
     (data || []).forEach(row => {
       const cust   = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+      let custName = cust?.name || null;
+      if (!custName && row.customer_id) {
+        const found = customers.find(c => c.id === row.customer_id);
+        custName = found?.name || null;
+      }
+      custName = custName || 'Walk-in';
       const sItems = Array.isArray(row.sale_items) ? row.sale_items : (row.sale_items ? [row.sale_items] : []);
       const productNames = sItems.map(si => {
         const it = Array.isArray(si.items) ? si.items[0] : si.items;
@@ -783,7 +922,7 @@ async function loadSalesReturns() {
         _dbId:     row.id,
         id:        'SR-' + String(row.id).slice(0, 8).toUpperCase(),
         invoiceId: String(row.id).slice(0, 8).toUpperCase(),
-        customer:  cust?.name || 'Walk-in',
+        customer:  custName,
         product:   productNames,
         qty:       totalQty,
         refundAmt: refundAmt,
@@ -969,6 +1108,56 @@ async function loadTrendingProducts() {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   EXPENSES
+   ═══════════════════════════════════════════════════════════ */
+async function loadExpenses() {
+  try {
+    const { data, error } = await db
+      .from('expenses')
+      .select('id, expense_date, amount, description, created_at')
+      .order('expense_date', { ascending: false })
+      .limit(500);
+    if (error) throw error;
+    expensesData = data || [];
+
+    // Update fin-expense in dashboard if loaded
+    const totalExp = expensesData.reduce((s, e) => s + parseFloat(e.amount || 0), 0);
+    const expEl = document.getElementById('fin-expense');
+    if (expEl) expEl.textContent = '৳' + totalExp.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+
+    renderExpenses();
+  } catch (err) {
+    console.error('loadExpenses error:', err);
+    expensesData = [];
+    renderExpenses();
+  }
+}
+
+async function saveExpenseToDB({ expense_date, amount, description }) {
+  try {
+    const { error } = await db
+      .from('expenses')
+      .insert([{ expense_date, amount, description }]);
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    console.error('saveExpenseToDB error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+async function deleteExpenseFromDB(id) {
+  try {
+    const { error } = await db.from('expenses').delete().eq('id', id);
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    console.error('deleteExpenseFromDB error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
 async function initSupabase() {
   const ok = await checkSupabaseConnection();
   if (!ok) return;
@@ -980,6 +1169,7 @@ async function initSupabase() {
     ['suppliers',  loadSuppliers],
     ['sales',          loadSales],
     ['purchases',      loadPurchases],
+    ['expenses',       loadExpenses],
     ['sales-returns',  loadSalesReturns],
     ['purch-returns',  loadPurchaseReturns],
     ['dashboard',      loadDashboardStats],
@@ -1124,7 +1314,7 @@ async function loadProfitLossReport() {
       sum + (s.sale_items||[]).reduce((a,si) => a + parseFloat(si.subtotal||0), 0), 0);
 
     /* ── 6. Zero-value fields (no expense module yet) ── */
-    const expense      = 0;
+    const expense      = (typeof expensesData !== 'undefined' ? expensesData : []).filter(e => { if (!from && !to) return true; const d=(e.expense_date||''); return (!from||d>=from) && (!to||d<=to); }).reduce((s,e)=>s+parseFloat(e.amount||0),0);
     const stockAdj     = 0;
     const purShipping  = 0;
     const purAddl      = 0;

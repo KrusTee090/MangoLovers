@@ -2269,10 +2269,12 @@ async function _submitNewSale() {
     if (typeof db === 'undefined') throw new Error('DB not connected');
 
     // 1. Insert sale header
+    const saleTotal = parseFloat(document.getElementById('nsi-total')?.value) || 0;
     const { data: saleRows, error: saleErr } = await db
       .from('sales')
       .insert([{
         customer_id:    customerId || null,
+        total_amount:   saleTotal,
         payment_type:   paymentMethod,
         payment_status: paymentStatus,
         sale_date:      new Date().toISOString(),
