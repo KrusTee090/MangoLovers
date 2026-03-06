@@ -1152,22 +1152,21 @@
     <div class="modal-sub">Fill in the product details below</div>
     <form onsubmit="submitProduct(event)">
       <div class="form-row">
-        <div class="form-group"><label class="form-lbl">Product Name</label><input class="form-input" placeholder="e.g. Sony WH-1000XM5" required></div>
-        <div class="form-group"><label class="form-lbl">SKU</label><input class="form-input" placeholder="e.g. SON-001"></div>
+        <div class="form-group"><label class="form-lbl">Product Name</label><input id="ap-name" class="form-input" placeholder="e.g. Premium Honey 1kg" required></div>
+        <div class="form-group"><label class="form-lbl">SKU / Barcode</label><input id="ap-sku" class="form-input" placeholder="e.g. HNY-001"></div>
       </div>
       <div class="form-group"><label class="form-lbl">Category</label>
-        <select class="form-select"><option>Electronics</option><option>Clothing</option><option>Food &amp; Beverage</option><option>Home &amp; Living</option></select>
+        <select id="ap-category" class="form-select">
+          <option value="Uncategorized">Uncategorized</option>
+        </select>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-lbl">Unit Price (৳)</label><input class="form-input" type="number" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label class="form-lbl">Cost Price (৳)</label><input class="form-input" type="number" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label class="form-lbl">Selling Price (৳)</label><input id="ap-price" class="form-input" type="number" step="0.01" min="0" placeholder="0.00"></div>
+        <div class="form-group"><label class="form-lbl">Cost Price (৳)</label><input id="ap-cost" class="form-input" type="number" step="0.01" min="0" placeholder="0.00"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-lbl">Initial Stock</label><input class="form-input" type="number" placeholder="0"></div>
-        <div class="form-group"><label class="form-lbl">Min Stock</label><input class="form-input" type="number" placeholder="0"></div>
-      </div>
-      <div class="form-group"><label class="form-lbl">Supplier</label>
-        <select class="form-select"><option>TechWorld Distributors</option><option>Apple Premium Reseller</option><option>Nike Bangladesh</option><option>Nature's Best</option></select>
+        <div class="form-group"><label class="form-lbl">Initial Stock</label><input id="ap-stock" class="form-input" type="number" min="0" placeholder="0"></div>
+        <div class="form-group"><label class="form-lbl">Unit of Measure</label><input id="ap-uom" class="form-input" placeholder="e.g. Kg, Pcs, L"></div>
       </div>
       <div class="modal-acts">
         <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>

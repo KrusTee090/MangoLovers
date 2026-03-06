@@ -270,13 +270,24 @@ async function loadProducts() {
 
 async function saveProduct(formData) {
   try {
+    // items.id is VARCHAR(20) with no default — generate next numeric ID
+    const { data: maxRow } = await db
+      .from('items')
+      .select('id')
+      .order('id', { ascending: false })
+      .limit(1);
+    const lastId  = maxRow?.[0]?.id ? parseInt(maxRow[0].id) : 1000;
+    const newId   = String(isNaN(lastId) ? Date.now() % 100000 : lastId + 1);
+
     const payload = {
+      id:             newId,
       name:           formData.name,
-      category:       formData.category,
-      cost_price:     parseFloat(formData.cost)     || 0,
-      selling_price:  parseFloat(formData.price)    || 0,
-      stock_quantity: parseInt(formData.stock)      || 0,
-      barcode:        formData.sku || null,
+      category:       formData.category || 'Uncategorized',
+      cost_price:     parseFloat(formData.cost)  || 0,
+      selling_price:  parseFloat(formData.price) || 0,
+      stock_quantity: parseInt(formData.stock)   || 0,
+      uom:            formData.uom  || null,
+      barcode:        formData.sku  || null,
       description:    formData.description || null,
     };
     const { data, error } = await db.from('items').insert([payload]).select();
@@ -1044,25 +1055,37 @@ function setupRealtimeSubscriptions() {
    ═══════════════════════════════════════════════════════════ */
 function submitProduct(e) {
   e.preventDefault();
-  const form = e.target;
-  const inputs = form.querySelectorAll('input, select');
   const formData = {
-    name:        inputs[0]?.value,
-    sku:         inputs[1]?.value,
-    category:    inputs[2]?.value,
-    price:       inputs[3]?.value,
-    cost:        inputs[4]?.value,
-    stock:       inputs[5]?.value,
-    minStock:    inputs[6]?.value,
+    name:     document.getElementById('ap-name')?.value?.trim(),
+    sku:      document.getElementById('ap-sku')?.value?.trim(),
+    category: document.getElementById('ap-category')?.value || 'Uncategorized',
+    price:    document.getElementById('ap-price')?.value,
+    cost:     document.getElementById('ap-cost')?.value,
+    stock:    document.getElementById('ap-stock')?.value,
+    uom:      document.getElementById('ap-uom')?.value?.trim(),
   };
+  if (!formData.name) { showBanner('error', '❌ Product name is required'); return; }
   saveProduct(formData).then(result => {
     if (result.success) {
       closeModal();
-      showBanner('success', '✅ Product saved to Supabase!', 3000);
+      e.target.reset();
+      populateAddProductCategories();
+      showBanner('success', '✅ Product saved!', 3000);
     } else {
       showBanner('error', `❌ Failed to save: ${result.error}`);
     }
   });
+}
+
+/* Populate #ap-category from loaded products — called when modal opens */
+function populateAddProductCategories() {
+  const sel = document.getElementById('ap-category');
+  if (!sel) return;
+  const existing = sel.value; // preserve current selection if any
+  const cats = [...new Set(products.map(p => p.category).filter(c => c && c !== 'Uncategorized'))].sort();
+  sel.innerHTML = '<option value="Uncategorized">Uncategorized</option>'
+    + cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  if (existing && [...sel.options].some(o => o.value === existing)) sel.value = existing;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -2215,7 +2238,7 @@ function printStockReport() {
   </div>
   <table>
     <thead><tr>
-      <th>Item ID</th><th>Name</th><th style="text-align:center">UoM</th>
+      <th>Item ID</th><th>Name</th><th style="text-align:center">uom</th>
       <th style="text-align:center">Stock In</th><th style="text-align:center">Stock Out</th>
       <th style="text-align:center">Returns</th><th style="text-align:center">Net</th>
       <th style="text-align:right">Current Stock</th><th style="text-align:right">Stock Value</th>
