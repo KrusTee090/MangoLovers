@@ -335,7 +335,7 @@ async function loadSuppliers() {
     if (error) throw error;
 
     const mapped = (data || []).map(row => ({
-      id:              row.id,
+      id:              row.supplier_id || row.id,
       name:            row.name,
       address:         row.address || '—',
       contact:         row.phone || row.email || '—',
@@ -367,7 +367,7 @@ async function loadSales() {
     const { data, error } = await db
       .from('sales')
       .select(`
-        id, customer_id, payment_type, payment_status, sale_date, paid_amount,
+        id, customer_id, payment_type, payment_status, sale_date, paid_amount, discount_amount,
         customers!customer_id(name),
         sale_items!sale_items_sale_id_fkey(
           id, quantity, unit_price, subtotal,
@@ -426,7 +426,8 @@ async function loadSales() {
         customer:    customerName,
         items:       lineItems.length || 1,
         itemSummary: itemSummary,
-        total:       lineItems.reduce((s, li) => s + li.subtotal, 0),
+        total:       lineItems.reduce((s, li) => s + li.subtotal, 0) - (parseFloat(row.discount_amount) || 0),
+        discount:    parseFloat(row.discount_amount) || 0,
         payment:     payLabel(row.payment_type || 'cash'),
         status:      statusMap[row.payment_status] || 'Completed',
         date:        sd,
@@ -466,8 +467,7 @@ async function loadPurchases() {
         .from('supplier_purchases')
         .select(`
           id, total_amount, purchase_date, payment_status, paid_amount,
-          quantity, item_id,
-          suppliers(name),
+          quantity, item_id, supplier_id, direct_expense, additional_expense,
           items!item_id(id, name, uom)
         `)
         .order('purchase_date', { ascending: false })
@@ -478,9 +478,14 @@ async function loadPurchases() {
     const statusMap = { paid: 'Received', pending: 'Pending', partial_paid: 'In Transit', partial: 'In Transit', returned: 'Returned' };
 
     const mapped = (data || []).map(row => {
-      // Safely handle supplier
-      const supp = Array.isArray(row.suppliers) ? row.suppliers[0] : row.suppliers;
-      const supplierName = supp?.name || '—';
+      // Resolve supplier name from in-memory suppliersData (reliable, no join needed)
+      let supplierName = null;
+      if (row.supplier_id) {
+        const found = (typeof suppliersData !== 'undefined' ? suppliersData : [])
+          .find(s => s.id === row.supplier_id);
+        supplierName = found?.name || null;
+      }
+      supplierName = supplierName || '—';
 
       // Build line item directly from supplier_purchases row fields
       const itemObj = Array.isArray(row.items) ? row.items[0] : row.items;
@@ -514,7 +519,9 @@ async function loadPurchases() {
         supplier:    supplierName,
         items:       lineItems.length || 1,
         itemSummary: itemSummary,
-        total:       parseFloat(row.total_amount) || 0,
+        total:          parseFloat(row.total_amount) || 0,
+        directExpense:  parseFloat(row.direct_expense)     || 0,
+        additionalExpense: parseFloat(row.additional_expense) || 0,
         paidAmount:  parseFloat(row.paid_amount)  || 0,
         status:      statusMap[row.payment_status] || 'Pending',
         date:        d,
@@ -551,16 +558,8 @@ async function loadPurchases() {
    ═══════════════════════════════════════════════════════════ */
 async function savePurchaseToDB(formData) {
   try {
-    /* 1. Resolve supplier id from name */
-    let supplierId = null;
-    if (formData.supplierName) {
-      const { data: supRows } = await db
-        .from('suppliers')
-        .select('id')
-        .ilike('name', formData.supplierName.trim())
-        .limit(1);
-      if (supRows && supRows.length) supplierId = supRows[0].id;
-    }
+    /* 1. Use supplier id passed directly from form (no lookup needed) */
+    const supplierId = formData.supplierId || null;
 
     /* 2. Resolve first line item — supplier_purchases stores item_id & quantity directly */
     const firstItem = formData.lineItems && formData.lineItems.length
@@ -571,24 +570,32 @@ async function savePurchaseToDB(formData) {
     const { data: poRows, error: poErr } = await db
       .from('supplier_purchases')
       .insert([{
-        supplier_id:    supplierId,
-        item_id:        firstItem?.itemId || null,
-        quantity:       firstItem?.qty    || null,
-        paid_amount:    parseFloat(formData.total) || 0,
-        total_amount:   parseFloat(formData.total) || 0,
-        payment_status: formData.paymentStatus || 'pending',
-        purchase_date:  new Date().toISOString(),
+        supplier_id:         supplierId,
+        item_id:             firstItem?.itemId || null,
+        quantity:            firstItem?.qty    || null,
+        paid_amount:         parseFloat(formData.productPrice ?? formData.total) || 0,
+        total_amount:        parseFloat(formData.total) || 0,
+        payment_status:      formData.paymentStatus || 'pending',
+        purchase_date:       new Date().toISOString(),
+        direct_expense:      parseFloat(formData.directExpense)     || 0,
+        additional_expense:  parseFloat(formData.additionalExpense) || 0,
       }])
       .select();
     if (poErr) throw poErr;
 
-    // Increment stock for every line item in the purchase
+    // Increment stock and accumulate cost_price for every line item
+    // formData.productPrice = qty × unit price (already multiplied before calling this)
+    const totalProductCost = parseFloat(formData.productPrice ?? formData.total) || 0;
     for (const li of (formData.lineItems || [])) {
       if (!li.itemId || li.qty <= 0) continue;
       const product = products.find(p => p.id === li.itemId);
       const currentStock = product?.stock ?? 0;
       const newStock = currentStock + li.qty;
-      await db.from('items').update({ stock_quantity: newStock }).eq('id', li.itemId);
+      // Accumulate total cost paid for this item (qty × unit price)
+      const { data: itemRow } = await db.from('items').select('cost_price').eq('id', li.itemId).single();
+      const existingCost = parseFloat(itemRow?.cost_price || 0);
+      const newCost = existingCost + totalProductCost;
+      await db.from('items').update({ stock_quantity: newStock, cost_price: newCost }).eq('id', li.itemId);
     }
 
     await loadPurchases();
@@ -1052,9 +1059,9 @@ function submitProduct(e) {
     sku:         inputs[1]?.value,
     category:    inputs[2]?.value,
     price:       inputs[3]?.value,
-    cost:        inputs[4]?.value,
-    stock:       inputs[5]?.value,
-    minStock:    inputs[6]?.value,
+    cost:        0,
+    stock:       inputs[4]?.value,
+    uom:         inputs[5]?.value,
   };
   saveProduct(formData).then(result => {
     if (result.success) {
@@ -1116,7 +1123,7 @@ async function loadExpenses() {
   try {
     const { data, error } = await db
       .from('expenses')
-      .select('id, expense_date, amount, description, created_at')
+      .select('id, expense_date, expense_type, amount, description, created_at')
       .order('expense_date', { ascending: false })
       .limit(500);
     if (error) throw error;
@@ -1135,11 +1142,11 @@ async function loadExpenses() {
   }
 }
 
-async function saveExpenseToDB({ expense_date, amount, description }) {
+async function saveExpenseToDB({ expense_date, expense_type, amount, description }) {
   try {
     const { error } = await db
       .from('expenses')
-      .insert([{ expense_date, amount, description }]);
+      .insert([{ expense_date, expense_type, amount, description }]);
     if (error) throw error;
     return { success: true };
   } catch (err) {
@@ -1273,7 +1280,7 @@ async function loadProfitLossReport() {
   try {
     /* ── 1. Fetch current stock from items (used for both opening & closing) ── */
     const { data: items } = await db.from('items').select('cost_price, selling_price, stock_quantity');
-    const stockCost = (items||[]).reduce((s,i) => s + parseFloat(i.cost_price||0) * (i.stock_quantity||0), 0);
+    const stockCost = (items||[]).reduce((s,i) => { const qty = i.stock_quantity||0; const cost = parseFloat(i.cost_price||0); return s + (qty > 0 ? cost / qty * qty : 0); }, 0);
     const stockSale = (items||[]).reduce((s,i) => s + parseFloat(i.selling_price||0) * (i.stock_quantity||0), 0);
 
     /* ── 2. Total purchases in range (non-returned) ── */
@@ -2029,7 +2036,7 @@ async function loadStockReport() {
     Object.values(agg).forEach(row => {
       row.netReturns  = row.saleReturns - row.purReturns;
       row.netMovement = row.stockIn - row.stockOut + row.netReturns;
-      row.stockValue  = row.currentStock * row.costPrice;
+      row.stockValue  = row.currentStock > 0 ? row.costPrice / row.currentStock : 0;
     });
 
     _srData = Object.values(agg).sort((a,b) => (b.stockIn + b.stockOut) - (a.stockIn + a.stockOut));

@@ -626,7 +626,6 @@ function renderProducts(){
       <td style="font-size:12px;color:var(--text-soft)">${p.category}</td>
       <td><div class="sbar-wrap"><span class="mono" style="font-size:12.5px;font-weight:700;color:${snColor(p.stock,p.minStock)}">${p.stock}</span><div style="display:flex;align-items:center;gap:3px"><div class="sbar"><div class="sfill ${sfClass(p.stock,p.minStock)}" style="width:${pct}%"></div></div><span style="font-size:9px;color:var(--text-faint)">/${p.minStock}</span></div></div></td>
       <td><span class="mono" style="font-weight:700">৳${p.price.toFixed(2)}</span></td>
-      <td><span class="mono" style="color:var(--text-soft)">৳${p.cost.toFixed(2)}</span></td>
       <td>${statusBadge(p.status)}</td>
       <td><div class="act-group">
         <button class="act-btn" title="View" onclick="_prodAction('view','${p.id}')">${svgIcon(eyeSvg,12)}</button>
@@ -673,7 +672,8 @@ function renderSalesTable(){
       <div style="width:26px;height:26px;border-radius:50%;background:var(--mango-bg);border:1px solid rgba(245,166,35,.25);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:var(--mango-dk);flex-shrink:0">${s.customer[0]}</div>${s.customer}</div></td>
     <td><div style="font-size:10.5px;color:var(--text-faint);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.lineItems&&s.lineItems.length?s.lineItems.map(li=>li.id||'').filter(Boolean).join(', '):'—'}</div></td>
     <td><div style="font-size:11.5px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.itemSummary||''}"><span class="mono" style="color:var(--text-soft)">${s.items}</span> · ${s.itemSummary||'—'}</div></td>
-    <td><span class="mono" style="font-weight:700;${s.status==='Returned'?'text-decoration:line-through;color:var(--text-faint)':''}">৳${fmt(s.total)}</span></td>
+    <td>${s.discount>0?`<span class="mono" style="font-size:11.5px;color:var(--red)">−৳${fmt(s.discount)}</span>`:'<span style="color:var(--text-faint)">—</span>'}</td>
+    <td><span class="mono" style="font-weight:700">৳${fmt(s.total)}</span></td>
     <td><span style="font-size:11.5px;${paymentColor(s.payment)}">${s.payment}</span></td>
     <td>${statusBadge(s.status)}</td>
     <td><span class="mono" style="font-size:10.5px;color:var(--text-faint)">${s.date}</span></td>
@@ -727,7 +727,7 @@ function renderPurchases(){
 
   if (filtered.length === 0) {
     document.getElementById('purchasesTbody').innerHTML =
-      `<tr><td colspan="8" style="text-align:center;color:var(--text-soft);padding:24px">No purchase orders found.</td></tr>`;
+      `<tr><td colspan="11" style="text-align:center;color:var(--text-soft);padding:24px">No purchase orders found.</td></tr>`;
     return;
   }
 
@@ -735,7 +735,10 @@ function renderPurchases(){
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${po.id}</span></td>
     <td style="font-weight:600">${po.supplier}</td>
     <td><div style="font-size:11.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${po.itemSummary||''}"><span class="mono" style="color:var(--text-soft)">${po.items}</span> · ${po.itemSummary||'—'}</div></td>
-    <td><span class="mono" style="font-weight:700;${po.status==='Returned'?'text-decoration:line-through;color:var(--text-faint)':''}">৳${po.total.toLocaleString()}</span></td>
+    <td><span class="mono" style="font-weight:700">৳${po.total.toLocaleString()}</span></td>
+    <td><span class="mono" style="font-size:12px;color:${po.directExpense>0?'var(--blue)':'var(--text-faint)'}">৳${(po.directExpense||0).toLocaleString()}</span></td>
+    <td><span class="mono" style="font-size:12px;color:${po.additionalExpense>0?'var(--purple)':'var(--text-faint)'}">৳${(po.additionalExpense||0).toLocaleString()}</span></td>
+    <td><span class="mono" style="font-weight:700;color:var(--mint)">৳${((po.total||0)+(po.directExpense||0)+(po.additionalExpense||0)).toLocaleString()}</span></td>
     <td>${statusBadge(po.status)}</td>
     <td><span class="mono" style="font-size:11.5px;color:var(--text-soft)">${po.date}</span></td>
     <td><span class="mono" style="font-size:11.5px;${po.status==='Overdue'?'color:var(--red);font-weight:700':'color:var(--text-soft)'}">${po.dueDate}</span></td>
@@ -941,7 +944,7 @@ function renderExpenses() {
   const weekStart = `${weekD.getFullYear()}-${pad(weekD.getMonth()+1)}-${pad(weekD.getDate())}`;
 
   let rows = expensesData.filter(e => {
-    if (query && !(e.description||'').toLowerCase().includes(query)) return false;
+    if (query && !(e.description||'').toLowerCase().includes(query) && !(e.expense_type||'').toLowerCase().includes(query)) return false;
     if (_expFilter === 'today') return e.expense_date === today;
     if (_expFilter === 'week')  return e.expense_date >= weekStart;
     if (_expFilter === 'month') return e.expense_date >= monStart;
@@ -960,14 +963,29 @@ function renderExpenses() {
   setEl('exp-today',        fmt(totalToday));
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-soft);padding:28px">No expenses found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-soft);padding:28px">No expenses found.</td></tr>';
     return;
   }
-  tbody.innerHTML = rows.map((e,i) => `
+  const typeColors = {
+    Conveyance: 'var(--blue)',   Rent: 'var(--purple)',
+    Utility:    'var(--mint)',   Courier: 'var(--mango-dk)',
+    Salary:     'var(--green)',  Other: 'var(--text-soft)',
+  };
+  const typeBg = {
+    Conveyance: 'var(--blue-bg)',   Rent: '#f3f0fd',
+    Utility:    'var(--green-bg)',  Courier: 'var(--mango-bg)',
+    Salary:     'var(--green-bg)', Other: 'var(--surface2)',
+  };
+  tbody.innerHTML = rows.map((e,i) => {
+    const t   = e.expense_type || 'Other';
+    const col = typeColors[t] || 'var(--text-soft)';
+    const bg  = typeBg[t]    || 'var(--surface2)';
+    return `
     <tr style="animation:fadeUp .3s ease ${i*30}ms both">
       <td style="color:var(--text-soft);font-size:12px">${e.expense_date || '—'}</td>
-      <td style="font-weight:500">${e.description || '<span style="color:var(--text-faint);font-style:italic">No description</span>'}</td>
+      <td><span style="font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:20px;background:${bg};color:${col}">${t}</span></td>
       <td style="text-align:right"><span class="mono" style="font-weight:700;color:var(--red)">৳${parseFloat(e.amount||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</span></td>
+      <td style="font-weight:500;color:var(--text-soft);font-size:12px">${e.description || '<span style="color:var(--text-faint);font-style:italic">—</span>'}</td>
       <td style="text-align:right">
         <div class="act-group">
           <button class="act-btn" title="Delete" onclick="deleteExpense(${e.id})" style="color:var(--red)">
@@ -975,7 +993,8 @@ function renderExpenses() {
           </button>
         </div>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 function openNewExpense() {
@@ -994,10 +1013,22 @@ function openNewExpense() {
             style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font-size:13px;font-family:inherit">
         </div>
         <div class="feat-field">
-          <label>Amount (৳)</label>
-          <input type="number" id="exp-amount" min="0" step="0.01" placeholder="0.00"
-            style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font-size:13px;font-family:inherit">
+          <label>Type</label>
+          <select id="exp-type" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;outline:none">
+            <option value="" disabled selected>— Select Type —</option>
+            <option value="Conveyance">Conveyance</option>
+            <option value="Rent">Rent</option>
+            <option value="Utility">Utility</option>
+            <option value="Courier">Courier</option>
+            <option value="Salary">Salary</option>
+            <option value="Other">Other</option>
+          </select>
         </div>
+      </div>
+      <div class="feat-field" style="margin-top:10px">
+        <label>Amount (৳)</label>
+        <input type="number" id="exp-amount" min="0" step="0.01" placeholder="0.00"
+          style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font-size:13px;font-family:inherit">
       </div>
       <div class="feat-field" style="margin-top:10px">
         <label>Description</label>
@@ -1017,14 +1048,16 @@ function openNewExpense() {
 
 async function _submitExpense() {
   const date   = document.getElementById('exp-date')?.value;
+  const type   = document.getElementById('exp-type')?.value || 'Other';
   const amount = parseFloat(document.getElementById('exp-amount')?.value);
   const desc   = document.getElementById('exp-desc')?.value?.trim();
   if (!date)        { toast('Please select a date', 'error'); return; }
+  if (!type)        { toast('Please select a type', 'error'); return; }
   if (!amount || amount <= 0) { toast('Please enter a valid amount', 'error'); return; }
   const btn = document.querySelector('.feat-footer .btn-mango');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const result = typeof saveExpenseToDB === 'function'
-    ? await saveExpenseToDB({ expense_date: date, amount, description: desc || null })
+    ? await saveExpenseToDB({ expense_date: date, expense_type: type, amount, description: desc || null })
     : { success: false, error: 'saveExpenseToDB not found' };
   if (result.success) {
     closePanel();

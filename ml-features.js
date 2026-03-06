@@ -641,14 +641,8 @@ function editProduct(p) {
         <div class="feat-field"><label>Category</label>
           <select id="ep-cat">${cats.map(c=>`<option value="${c}" ${c===p.category?'selected':''}>${c}</option>`).join('')}</select>
         </div>
-        <div class="feat-field"><label>Supplier</label>
-          <input id="ep-supplier" value="${p.supplier||''}"></div>
-      </div>
-      <div class="feat-row">
         <div class="feat-field"><label>Selling Price (৳)</label>
           <input id="ep-price" type="number" step="0.01" value="${p.price}"></div>
-        <div class="feat-field"><label>Cost Price (৳)</label>
-          <input id="ep-cost" type="number" step="0.01" value="${p.cost}"></div>
       </div>
       <div class="feat-row">
         <div class="feat-field"><label>Current Stock</label>
@@ -671,9 +665,7 @@ async function _saveEditProduct(pid) {
   const name     = document.getElementById('ep-name').value.trim();
   const sku      = document.getElementById('ep-sku').value.trim();
   const category = document.getElementById('ep-cat').value;
-  const supplier = document.getElementById('ep-supplier').value.trim();
   const price    = parseFloat(document.getElementById('ep-price').value) || 0;
-  const cost     = parseFloat(document.getElementById('ep-cost').value) || 0;
   const stock    = parseInt(document.getElementById('ep-stock').value) || 0;
   const minStock = parseInt(document.getElementById('ep-minstock').value) || 10;
 
@@ -683,7 +675,7 @@ async function _saveEditProduct(pid) {
   const idx = products.findIndex(x => x.id === pid);
   if (idx > -1) {
     Object.assign(products[idx], {
-      name, sku, category, supplier, price, cost, stock, minStock,
+      name, sku, category, price, stock, minStock,
       status: stock === 0 ? 'Out of Stock' : stock <= minStock ? 'Low Stock' : 'In Stock',
     });
   }
@@ -693,7 +685,7 @@ async function _saveEditProduct(pid) {
     try {
       const { error } = await db.from('items').update({
         name, barcode: sku, category,
-        selling_price: price, cost_price: cost,
+        selling_price: price,
         stock_quantity: stock,
       }).eq('id', pid);
       if (error) throw error;
@@ -1656,6 +1648,43 @@ function _addPurchaseReturn() {
 /* ══════════════════════════════════
    NEW PURCHASE MODAL
 ══════════════════════════════════ */
+
+function _npoItemSearch(e) {
+  const val = document.getElementById('npo-item-search')?.value?.trim().toLowerCase() || '';
+  const dd  = document.getElementById('npo-item-dropdown');
+  if (!dd) return;
+  const matches = val
+    ? products.filter(p => p.name.toLowerCase().includes(val) || p.id.toLowerCase().includes(val))
+    : products;
+  if (!matches.length) { dd.style.display = 'none'; return; }
+  dd.style.display = 'block';
+  dd.innerHTML = matches.slice(0, 12).map(p => `
+    <div data-id="${p.id}" data-name="${p.name}" onmousedown="event.preventDefault();_npoItemPick('${p.id}','${p.name.replace(/'/g,"\'")}')"
+      style="padding:8px 12px;cursor:pointer;font-size:12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e8eee9;background:#fff;color:#1a2e22"
+      onmouseover="this.style.background='#f0f8f3'" onmouseout="this.style.background='#fff'">
+      <div><span style="font-family:monospace;color:#1a8a4a;font-size:10.5px;margin-right:6px">${p.id}</span><span style="color:#1a2e22">${p.name}</span></div>
+      <span style="color:#6b8a74;font-size:11px;font-family:monospace">৳${Number(p.price||0).toFixed(2)}</span>
+    </div>`).join('');
+}
+function _npoItemPick(id, name) {
+  document.getElementById('npo-item-search').value = name;
+  document.getElementById('npo-item').value = id;
+  document.getElementById('npo-item-dropdown').style.display = 'none';
+}
+function _npoItemBlur(e) {
+  setTimeout(() => { const dd = document.getElementById('npo-item-dropdown'); if (dd) dd.style.display = 'none'; }, 150);
+}
+
+function _npoCalcTotal() {
+  const qty            = parseFloat(document.getElementById('npo-qty')?.value)               || 0;
+  const productPrice   = parseFloat(document.getElementById('npo-total')?.value)             || 0;
+  const directExpense  = parseFloat(document.getElementById('npo-direct-expense')?.value)    || 0;
+  const additionalExp  = parseFloat(document.getElementById('npo-additional-expense')?.value) || 0;
+  const grandTotal     = (qty * productPrice) + directExpense + additionalExp;
+  const el = document.getElementById('npo-total-display');
+  if (el) el.textContent = '৳' + grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+}
+
 function openNewPO() {
   const supplierOptions = suppliersData.map(s =>
     `<option value="${s.name}">${s.name}</option>`).join('');
@@ -1693,19 +1722,43 @@ function openNewPO() {
       </div>
       <div class="feat-field">
         <label>Item</label>
-        <select id="npo-item" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12.5px;width:100%;box-sizing:border-box">
-          <option value="">— Select Item —</option>
-          ${itemOptions}
-        </select>
+        <div style="position:relative">
+          <input id="npo-item-search" autocomplete="off" placeholder="Search or type item name…"
+            oninput="_npoItemSearch(event)" onfocus="_npoItemSearch(event)" onblur="_npoItemBlur(event)"
+            style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12.5px;box-sizing:border-box">
+          <input type="hidden" id="npo-item">
+          <div id="npo-item-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1px solid var(--border);border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.2);max-height:180px;overflow-y:auto;margin-top:3px"></div>
+        </div>
       </div>
       <div class="feat-row">
         <div class="feat-field">
           <label>Quantity</label>
-          ${inp('npo-qty','number','1','min="1" step="1"')}
+          <input id="npo-qty" type="number" placeholder="1" min="1" step="1" oninput="_npoCalcTotal()"
+            style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12.5px;width:100%;box-sizing:border-box">
         </div>
         <div class="feat-field">
-          <label>Total Price (৳)</label>
-          ${inp('npo-total','number','0.00','min="0" step="0.01"')}
+          <label>Product Price (৳)</label>
+          <input id="npo-total" type="number" placeholder="0.00" min="0" step="0.01" oninput="_npoCalcTotal()"
+            style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12.5px;width:100%;box-sizing:border-box">
+        </div>
+      </div>
+      <div style="padding:12px 0 4px;border-top:1px solid var(--border);margin-top:2px">
+        <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin-bottom:10px">Additional Costs</div>
+        <div class="feat-row">
+          <div class="feat-field">
+            <label>Direct Expense <span style="font-size:10px;color:var(--text-faint)">(transport)</span></label>
+            <input id="npo-direct-expense" type="number" placeholder="0.00" min="0" step="0.01" oninput="_npoCalcTotal()"
+              style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12.5px;width:100%;box-sizing:border-box">
+          </div>
+          <div class="feat-field">
+            <label>Additional Expense</label>
+            <input id="npo-additional-expense" type="number" placeholder="0.00" min="0" step="0.01" oninput="_npoCalcTotal()"
+              style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12.5px;width:100%;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="margin-top:12px;padding:12px 14px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:12px;font-weight:600;color:var(--text-soft)">Total Amount</span>
+          <span id="npo-total-display" style="font-size:16px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--mint)">৳0.00</span>
         </div>
       </div>
     </div>
@@ -1724,11 +1777,12 @@ function openNewPO() {
 async function _submitNewPO() {
   const supplierName  = document.getElementById('npo-supplier')?.value?.trim();
   const paymentStatus = document.getElementById('npo-status')?.value;
-  const itemSel       = document.getElementById('npo-item');
-  const itemId        = itemSel?.value || null;
-  const itemName      = itemSel?.options[itemSel?.selectedIndex]?.dataset?.name || '';
-  const qty           = parseFloat(document.getElementById('npo-qty')?.value)   || 0;
-  const total         = parseFloat(document.getElementById('npo-total')?.value) || 0;
+  const itemId        = document.getElementById('npo-item')?.value?.trim() || null;
+  const itemName      = document.getElementById('npo-item-search')?.value?.trim() || '';
+  const qty              = parseFloat(document.getElementById('npo-qty')?.value)              || 0;
+  const total            = parseFloat(document.getElementById('npo-total')?.value)            || 0;
+  const directExpense    = parseFloat(document.getElementById('npo-direct-expense')?.value)   || 0;
+  const additionalExpense= parseFloat(document.getElementById('npo-additional-expense')?.value)|| 0;
 
   if (!supplierName) { toast('Please select a supplier', 'error'); return; }
   if (!itemId)       { toast('Please select an item', 'error');    return; }
@@ -1740,7 +1794,7 @@ async function _submitNewPO() {
 
   const lineItems = [{ name: itemName, itemId, qty }];
   const result = typeof savePurchaseToDB === 'function'
-    ? await savePurchaseToDB({ supplierName, paymentStatus, total, lineItems })
+    ? await savePurchaseToDB({ supplierName, paymentStatus, productPrice: qty * total, total: (qty * total) + directExpense + additionalExpense, directExpense, additionalExpense, lineItems })
     : { success: false, error: 'DB not connected' };
 
   if (result.success) {
@@ -1896,11 +1950,13 @@ function _nsiLineHtml(itemOptions) {
           oninput="_nsiIdInput(event)" onblur="_nsiIdBlur(event)">
         <div class="nsi-id-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);max-height:160px;overflow-y:auto;margin-top:2px"></div>
       </div>
-      <select class="nsi-item-select" onchange="_nsiSelectChange(event)"
-        style="padding:7px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11.5px;box-sizing:border-box;width:100%">
-        <option value="">— Select Item —</option>
-        ${itemOptions}
-      </select>
+      <div style="position:relative;width:100%">
+        <input class="nsi-item-search" autocomplete="off" placeholder="Search item…"
+          oninput="_nsiItemSearch(event)" onfocus="_nsiItemSearch(event)" onblur="_nsiItemBlur(event)"
+          style="width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11.5px;box-sizing:border-box">
+        <input type="hidden" class="nsi-item-select" value="">
+        <div class="nsi-item-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1px solid var(--border);border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,.22);max-height:170px;overflow-y:auto;margin-top:2px"></div>
+      </div>
       <input type="number" class="nsi-qty" min="1" value="1" oninput="_nsiRecalcLine(event)"
         style="text-align:center;padding:7px 6px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;width:100%;box-sizing:border-box">
       <input type="number" class="nsi-price" min="0" step="0.01" placeholder="0.00" oninput="_nsiRecalcLine(event)"
@@ -1961,10 +2017,28 @@ function openNewSale() {
       <div id="nsi-lines">${_nsiLineHtml(itemOptions)}</div>
       <button onclick="_addSaleLine()" style="font-size:11.5px;padding:5px 12px;border:1px dashed var(--border);border-radius:8px;background:transparent;color:var(--text-soft);cursor:pointer;width:100%;margin-bottom:12px">+ Add Item</button>
 
-      <div style="display:flex;justify-content:flex-end;align-items:center;gap:12px;padding:10px 2px;border-top:1px solid var(--border)">
-        <span style="font-size:12px;color:var(--text-soft);font-weight:600">TOTAL</span>
-        <span id="nsi-total-display" style="font-size:20px;font-weight:800;color:var(--mint);font-family:monospace">৳0.00</span>
-        <input id="nsi-total" type="hidden" value="0">
+      <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--text-soft);font-weight:600;flex-shrink:0">Discount</span>
+          <select id="nsi-discount-type" onchange="_nsiRecalcTotal()"
+            style="padding:5px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11.5px;font-family:inherit">
+            <option value="none">None</option>
+            <option value="flat">Flat (৳)</option>
+            <option value="pct">Percentage (%)</option>
+          </select>
+          <input id="nsi-discount-val" type="number" min="0" step="0.01" placeholder="0" oninput="_nsiRecalcTotal()"
+            style="width:90px;padding:5px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11.5px;display:none">
+        </div>
+        <div style="display:flex;justify-content:flex-end;align-items:center;gap:12px">
+          <div id="nsi-discount-row" style="display:none;flex-direction:column;align-items:flex-end;gap:2px;margin-right:8px">
+            <span style="font-size:11px;color:var(--text-soft)">Subtotal: <span id="nsi-subtotal-display" style="font-family:monospace">৳0.00</span></span>
+            <span style="font-size:11px;color:var(--red)">Discount: <span id="nsi-discount-display" style="font-family:monospace">−৳0.00</span></span>
+          </div>
+          <span style="font-size:12px;color:var(--text-soft);font-weight:600">TOTAL</span>
+          <span id="nsi-total-display" style="font-size:20px;font-weight:800;color:var(--mint);font-family:monospace">৳0.00</span>
+          <input id="nsi-total" type="hidden" value="0">
+          <input id="nsi-discount-amount" type="hidden" value="0">
+        </div>
       </div>
     </div>
     <div class="feat-footer">
@@ -1985,16 +2059,14 @@ function _addSaleLine() {
 }
 
 function _nsiFillLine(line, product) {
-  const idInput = line.querySelector('.nsi-id-input');
-  const sel     = line.querySelector('.nsi-item-select');
-  const priceIn = line.querySelector('.nsi-price');
-  if (idInput) idInput.value = product.id || '';
-  if (sel) {
-    for (let i = 0; i < sel.options.length; i++) {
-      if (sel.options[i].value === product.id) { sel.selectedIndex = i; break; }
-    }
-  }
-  if (priceIn) priceIn.value = product.price > 0 ? Number(product.price).toFixed(2) : '';
+  const idInput    = line.querySelector('.nsi-id-input');
+  const searchIn   = line.querySelector('.nsi-item-search');
+  const hiddenSel  = line.querySelector('.nsi-item-select');
+  const priceIn    = line.querySelector('.nsi-price');
+  if (idInput)   idInput.value   = product.id || '';
+  if (searchIn)  searchIn.value  = product.name || '';
+  if (hiddenSel) hiddenSel.value = product.id || '';
+  if (priceIn)   priceIn.value   = product.price > 0 ? Number(product.price).toFixed(2) : '';
   _nsiRecalcLine({ target: priceIn || line.querySelector('.nsi-qty') });
 }
 
@@ -2054,6 +2126,46 @@ function _nsiSelectChange(e) {
   }
 }
 
+
+function _nsiItemSearch(e) {
+  const input = e.target;
+  const line  = input.closest('.nsi-line');
+  const dd    = line?.querySelector('.nsi-item-dropdown');
+  if (!dd) return;
+  const val = input.value.trim().toLowerCase();
+  const matches = val
+    ? products.filter(p => p.name.toLowerCase().includes(val) || p.id.toLowerCase().includes(val))
+    : products;
+  if (!matches.length) { dd.style.display = 'none'; return; }
+  dd.style.display = 'block';
+  dd.innerHTML = matches.slice(0, 10).map(p => `
+    <div data-id="${p.id}" onmousedown="event.preventDefault()"
+      style="padding:7px 10px;cursor:pointer;font-size:11.5px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e8eee9;background:#fff;color:#1a2e22"
+      onmouseover="this.style.background='#f0f8f3'" onmouseout="this.style.background='#fff'">
+      <span><span style="font-family:monospace;color:#1a8a4a;font-size:10px;margin-right:5px">${p.id}</span><span style="color:#1a2e22">${p.name}</span></span>
+      <span style="color:#6b8a74;font-size:11px;font-family:monospace">৳${Number(p.price||0).toFixed(2)}</span>
+    </div>`).join('');
+  dd.querySelectorAll('div').forEach((opt, idx) => {
+    const p = matches[idx];
+    opt.addEventListener('mousedown', ev => {
+      ev.preventDefault();
+      input.value = p.name;
+      const hiddenSel = line.querySelector('.nsi-item-select');
+      if (hiddenSel) hiddenSel.value = p.id;
+      dd.style.display = 'none';
+      const priceIn = line.querySelector('.nsi-price');
+      const idIn    = line.querySelector('.nsi-id-input');
+      if (priceIn) priceIn.value = p.price > 0 ? Number(p.price).toFixed(2) : '';
+      if (idIn)    idIn.value    = p.id;
+      _nsiRecalcLine({ target: priceIn || line.querySelector('.nsi-qty') });
+    });
+  });
+}
+function _nsiItemBlur(e) {
+  const line = e.target.closest('.nsi-line');
+  setTimeout(() => { const dd = line?.querySelector('.nsi-item-dropdown'); if (dd) dd.style.display = 'none'; }, 150);
+}
+
 function _nsiRecalcLine(e) {
   const line = e?.target?.closest('.nsi-line');
   if (!line) return;
@@ -2065,10 +2177,32 @@ function _nsiRecalcLine(e) {
 }
 
 function _nsiRecalcTotal() {
-  let total = 0;
+  let subtotal = 0;
   document.querySelectorAll('.nsi-line').forEach(line => {
-    total += parseFloat(line.querySelector('.nsi-subtotal')?.value) || 0;
+    subtotal += parseFloat(line.querySelector('.nsi-subtotal')?.value) || 0;
   });
+  const discType = document.getElementById('nsi-discount-type')?.value || 'none';
+  const discValEl = document.getElementById('nsi-discount-val');
+  const discValInput = parseFloat(discValEl?.value) || 0;
+
+  // Show/hide discount input
+  if (discValEl) discValEl.style.display = discType === 'none' ? 'none' : '';
+
+  let discAmt = 0;
+  if (discType === 'flat') discAmt = Math.min(discValInput, subtotal);
+  else if (discType === 'pct') discAmt = subtotal * Math.min(discValInput, 100) / 100;
+
+  const total = subtotal - discAmt;
+  const discRow = document.getElementById('nsi-discount-row');
+  if (discRow) discRow.style.display = discAmt > 0 ? 'flex' : 'none';
+
+  const subDisp = document.getElementById('nsi-subtotal-display');
+  const discDisp = document.getElementById('nsi-discount-display');
+  const hiddenDisc = document.getElementById('nsi-discount-amount');
+  if (subDisp)   subDisp.textContent   = '৳' + subtotal.toLocaleString('en-IN', {minimumFractionDigits:2});
+  if (discDisp)  discDisp.textContent  = '−৳' + discAmt.toLocaleString('en-IN', {minimumFractionDigits:2});
+  if (hiddenDisc) hiddenDisc.value = discAmt.toFixed(2);
+
   const hidden  = document.getElementById('nsi-total');
   const display = document.getElementById('nsi-total-display');
   if (hidden)  hidden.value = total.toFixed(2);
@@ -2082,9 +2216,9 @@ async function _submitNewSale() {
 
   const lineItems = [];
   document.querySelectorAll('.nsi-line').forEach(line => {
-    const sel      = line.querySelector('.nsi-item-select');
-    const itemId   = sel?.value || null;
-    const name     = products.find(p => p.id === itemId)?.name || '';
+    const hiddenSel = line.querySelector('.nsi-item-select');
+    const itemId    = hiddenSel?.value || null;
+    const name      = products.find(p => p.id === itemId)?.name || '';
     const qty      = parseFloat(line.querySelector('.nsi-qty')?.value)   || 0;
     const price    = parseFloat(line.querySelector('.nsi-price')?.value) || 0;
     const subtotal = parseFloat(line.querySelector('.nsi-subtotal')?.value) || (qty * price);
@@ -2104,11 +2238,12 @@ async function _submitNewSale() {
     const { data: saleRows, error: saleErr } = await db
       .from('sales')
       .insert([{
-        customer_id:    customerId || null,
-        total_amount:   saleTotal,
-        payment_type:   paymentMethod,
-        payment_status: paymentStatus,
-        sale_date:      new Date().toISOString(),
+        customer_id:     customerId || null,
+        total_amount:    saleTotal,
+        discount_amount: parseFloat(document.getElementById('nsi-discount-amount')?.value) || 0,
+        payment_type:    paymentMethod,
+        payment_status:  paymentStatus,
+        sale_date:       new Date().toISOString(),
       }])
       .select();
     if (saleErr) throw saleErr;

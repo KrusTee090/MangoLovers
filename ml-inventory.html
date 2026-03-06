@@ -347,7 +347,7 @@
       </div>
       <div class="card">
         <div class="tbl-wrap"><table>
-          <thead><tr><th>Product</th><th>SKU</th><th>Category</th><th>Stock</th><th>Price</th><th>Cost</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Product</th><th>SKU</th><th>Category</th><th>Stock</th><th>Price</th><th>Status</th><th></th></tr></thead>
           <tbody id="productsTbody"></tbody>
         </table></div>
         <div class="pagination">
@@ -417,7 +417,7 @@
         </div>
       </div>
       <div class="card"><div class="tbl-wrap"><table>
-        <thead><tr><th>Invoice</th><th>Customer</th><th>Product ID</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th>Date</th><th></th></tr></thead>
+        <thead><tr><th>Invoice</th><th>Customer</th><th>Product ID</th><th>Items</th><th>Discount</th><th>Total</th><th>Payment</th><th>Status</th><th>Date</th><th></th></tr></thead>
         <tbody id="salesTbody"></tbody>
       </table></div></div>
     </div>
@@ -448,7 +448,7 @@
         </div>
       </div>
       <div class="card"><div class="tbl-wrap"><table>
-        <thead><tr><th>PO Number</th><th>Supplier</th><th>Items</th><th>Total</th><th>Status</th><th>Order Date</th><th>Due Date</th><th></th></tr></thead>
+        <thead><tr><th>PO Number</th><th>Supplier</th><th>Items</th><th>Product Price</th><th>Direct Exp.</th><th>Add. Exp.</th><th>Total</th><th>Status</th><th>Order Date</th><th>Due Date</th><th></th></tr></thead>
         <tbody id="purchasesTbody"></tbody>
       </table></div></div>
     </div>
@@ -508,8 +508,9 @@
         <div class="tbl-wrap"><table>
           <thead><tr>
             <th>Date</th>
-            <th>Description</th>
+            <th>Type</th>
             <th style="text-align:right">Amount</th>
+            <th>Description</th>
             <th></th>
           </tr></thead>
           <tbody id="expensesTbody"></tbody>
@@ -1162,7 +1163,6 @@
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-lbl">Selling Price (৳)</label><input id="ap-price" class="form-input" type="number" step="0.01" min="0" placeholder="0.00"></div>
-        <div class="form-group"><label class="form-lbl">Cost Price (৳)</label><input id="ap-cost" class="form-input" type="number" step="0.01" min="0" placeholder="0.00"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-lbl">Initial Stock</label><input id="ap-stock" class="form-input" type="number" min="0" placeholder="0"></div>
