@@ -247,9 +247,10 @@ async function loadProducts() {
       price:    parseFloat(row.selling_price),
       cost:     parseFloat(row.cost_price),
       supplier: '—',
-      status:   row.stock_quantity === 0 ? 'Out of Stock'
+      stockStatus: row.stock_quantity === 0 ? 'Out of Stock'
                 : row.stock_quantity <= 10 ? 'Low Stock'
                 : 'In Stock',
+      itemStatus: row.status || 'Active',
       iconSvg:  '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>',
     }));
 
@@ -332,11 +333,14 @@ async function loadCustomers() {
       const cid = s.customer_id;
       if (!cid) return;
       if (!statsMap[cid]) statsMap[cid] = { count: 0, spent: 0, outstanding: 0 };
-      const total = parseFloat(s.total_amount || 0);
-      const paid  = parseFloat(s.paid_amount  || 0);
+      const total  = parseFloat(s.total_amount || 0);
+      const status = (s.payment_status || '').toLowerCase();
       statsMap[cid].count++;
-      statsMap[cid].spent       += total;
-      statsMap[cid].outstanding += Math.max(0, total - paid);
+      statsMap[cid].spent += total;
+      // Due only for pending/partial sales
+      if (status === 'pending' || status === 'partial' || status === 'partial_paid') {
+        statsMap[cid].outstanding += total;
+      }
     });
 
     const mapped = (data || []).map(row => {
@@ -1307,100 +1311,100 @@ async function loadProfitLossReport() {
   try {
     /* ── 1. Fetch current stock from items (used for both opening & closing) ── */
     const { data: items } = await db.from('items').select('cost_price, selling_price, stock_quantity');
-    const stockCost = (items||[]).reduce((s,i) => { const qty = i.stock_quantity||0; const cost = parseFloat(i.cost_price||0); return s + (qty > 0 ? cost / qty * qty : 0); }, 0);
+    // Stock cost using: costPrice - (costPrice/totalQty)*soldQty
+    // Since we only have current stock here, use cost_price directly as remaining value
+    const stockCost = (items||[]).reduce((s,i) => s + parseFloat(i.cost_price||0), 0);
     const stockSale = (items||[]).reduce((s,i) => s + parseFloat(i.selling_price||0) * (i.stock_quantity||0), 0);
 
-    /* ── 2. Total purchases in range (non-returned) ── */
+    /* ── 2. Purchases in range (non-returned) — paid_amount, direct_expense, additional_expense ── */
     let purQuery = db.from('supplier_purchases')
-      .select('total_amount')
+      .select('paid_amount, direct_expense, additional_expense')
       .neq('payment_status','returned');
     if (from) purQuery = purQuery.gte('purchase_date', `${from}T00:00:00`);
     if (to)   purQuery = purQuery.lte('purchase_date', `${to}T23:59:59`);
     const { data: purRows } = await purQuery;
-    const totalPurchase = (purRows||[]).reduce((s,r) => s + parseFloat(r.total_amount||0), 0);
+    // Total Purchase = sum of paid_amount (qty × unit price only)
+    const totalPurchase = (purRows||[]).reduce((s,r) => s + parseFloat(r.paid_amount||0), 0);
+    // Direct Expense = sum of direct_expense column
+    const purShipping   = (purRows||[]).reduce((s,r) => s + parseFloat(r.direct_expense||0), 0);
+    // Additional Expenses = sum of additional_expense column
+    const purAddl       = (purRows||[]).reduce((s,r) => s + parseFloat(r.additional_expense||0), 0);
 
     /* ── 3. Purchase returns in range ── */
     let purRetQuery = db.from('supplier_purchases')
-      .select('total_amount')
+      .select('paid_amount')
       .eq('payment_status','returned');
     if (from) purRetQuery = purRetQuery.gte('purchase_date', `${from}T00:00:00`);
     if (to)   purRetQuery = purRetQuery.lte('purchase_date', `${to}T23:59:59`);
     const { data: purRetRows } = await purRetQuery;
-    const totalPurReturn = (purRetRows||[]).reduce((s,r) => s + parseFloat(r.total_amount||0), 0);
+    const totalPurReturn = (purRetRows||[]).reduce((s,r) => s + parseFloat(r.paid_amount||0), 0);
 
-    /* ── 4. Total sales in range (non-returned), using sale_items subtotals ── */
+    /* ── 4. Sales in range (non-returned) — total_amount and discount_amount ── */
     let saleQuery = db.from('sales')
-      .select('sale_items!sale_items_sale_id_fkey(subtotal)')
+      .select('total_amount, discount_amount')
       .neq('payment_status','returned');
     if (from) saleQuery = saleQuery.gte('sale_date', `${from}T00:00:00`);
     if (to)   saleQuery = saleQuery.lte('sale_date', `${to}T23:59:59`);
     const { data: saleRows } = await saleQuery;
-    const totalSales = (saleRows||[]).reduce((sum,s) =>
-      sum + (s.sale_items||[]).reduce((a,si) => a + parseFloat(si.subtotal||0), 0), 0);
+    // Total Sales = sum of total_amount (already net of discount)
+    const totalSales   = (saleRows||[]).reduce((s,r) => s + parseFloat(r.total_amount||0), 0);
+    // Sale Discount = sum of discount_amount
+    const sellDiscount = (saleRows||[]).reduce((s,r) => s + parseFloat(r.discount_amount||0), 0);
 
     /* ── 5. Sale returns in range ── */
     let saleRetQuery = db.from('sales')
-      .select('sale_items!sale_items_sale_id_fkey(subtotal)')
+      .select('total_amount')
       .eq('payment_status','returned');
     if (from) saleRetQuery = saleRetQuery.gte('sale_date', `${from}T00:00:00`);
     if (to)   saleRetQuery = saleRetQuery.lte('sale_date', `${to}T23:59:59`);
     const { data: saleRetRows } = await saleRetQuery;
-    const totalSellReturn = (saleRetRows||[]).reduce((sum,s) =>
-      sum + (s.sale_items||[]).reduce((a,si) => a + parseFloat(si.subtotal||0), 0), 0);
+    const totalSellReturn = (saleRetRows||[]).reduce((s,r) => s + parseFloat(r.total_amount||0), 0);
 
-    /* ── 6. Zero-value fields (no expense module yet) ── */
-    const expense      = (typeof expensesData !== 'undefined' ? expensesData : []).filter(e => { if (!from && !to) return true; const d=(e.expense_date||''); return (!from||d>=from) && (!to||d<=to); }).reduce((s,e)=>s+parseFloat(e.amount||0),0);
-    const stockAdj     = 0;
-    const purShipping  = 0;
-    const purAddl      = 0;
-    const transferShip = 0;
-    const sellDiscount = 0;
-    const custReward   = 0;
+    /* ── 6. Expenses from expenses table (Indirect Expenses) ── */
+    const expense = (typeof expensesData !== 'undefined' ? expensesData : [])
+      .filter(e => {
+        if (!from && !to) return true;
+        const d = e.expense_date || '';
+        return (!from || d >= from) && (!to || d <= to);
+      })
+      .reduce((s,e) => s + parseFloat(e.amount||0), 0);
+
+    /* ── 7. Derived calculations ── */
+    // Cost of Sales = Total Purchase + Direct Expense + Additional Expenses
+    const costOfSales  = totalPurchase + purShipping + purAddl;
+    // Indirect Expenses = expenses table total
+    const indirectExp  = expense;
+    // Total Expense = Cost of Sales + Indirect Expenses
+    const totalExpense = costOfSales + indirectExp;
+    // Sale Round Off = fractional part of totalSales (amount dropped by rounding)
+    const sellRoundoff = Math.floor(totalSales);
     const sellShipping = 0;
-    const sellAddl     = 0;
-    const stockRecover = 0;
-    const purDiscount  = 0;
-    const sellRoundoff = 0;
 
-    /* ── 7. COGS, Gross Profit, Net Profit ── */
-    // Opening stock = current stock (no historical snapshot available)
-    // Closing stock = same (current)
-    // COGS = opening stock + purchases − closing stock
-    const COGS        = stockCost + totalPurchase - stockCost; // simplifies to totalPurchase when opening=closing
-    const grossProfit = totalSales - totalPurchase;
-    const netIncome   = sellShipping + sellAddl + stockRecover + purDiscount + sellRoundoff;
-    const netCost     = stockAdj + expense + purShipping + transferShip + purAddl + sellDiscount + custReward;
-    const netProfit   = grossProfit + netIncome - netCost;
+    /* ── 8. COGS, Gross Profit, Net Profit ── */
+    const grossProfit = totalSales - costOfSales;
+    const netProfit   = grossProfit - indirectExp;
 
-    /* ── 8. Populate DOM ── */
+    /* ── 9. Populate DOM ── */
     // Left card — cost side
-    plSet('pl-opening-cost',  stockCost);
-    plSet('pl-opening-sale',  stockSale);
-    plSet('pl-total-purchase',totalPurchase);
-    plSet('pl-stock-adj',     stockAdj);
-    plSet('pl-expense',       expense);
-    plSet('pl-pur-shipping',  purShipping);
-    plSet('pl-pur-addl',      purAddl);
-    plSet('pl-transfer-ship', transferShip);
-    plSet('pl-sell-discount', sellDiscount);
-    plSet('pl-cust-reward',   custReward);
-    plSet('pl-sell-return',   totalSellReturn);
+    plSet('pl-total-purchase', totalPurchase);
+    plSet('pl-pur-shipping',   purShipping);
+    plSet('pl-pur-addl',       purAddl);
+    plSet('pl-stock-adj',      costOfSales);
+    plSet('pl-transfer-ship',  indirectExp);
+    plSet('pl-expense',        totalExpense);
 
     // Right card — revenue side
-    plSet('pl-closing-cost',    stockCost);
-    plSet('pl-closing-sale',    stockSale);
-    plSet('pl-total-sales',     totalSales);
-    plSet('pl-sell-shipping',   sellShipping);
-    plSet('pl-sell-addl',       sellAddl);
-    plSet('pl-stock-recovered', stockRecover);
-    plSet('pl-pur-return',      totalPurReturn);
-    plSet('pl-pur-discount',    purDiscount);
-    plSet('pl-sell-roundoff',   sellRoundoff);
+    plSet('pl-total-sales',   totalSales);
+    plSet('pl-sell-shipping', sellShipping);
+    plSet('pl-sell-discount', sellDiscount);
+    plSet('pl-sell-roundoff', sellRoundoff);
 
     // Summary
-    plSet('pl-cogs',  COGS);
-    plSet('pl-gross', grossProfit);
-    plSet('pl-net',   netProfit);
+    plSet('pl-stmt-sales',    totalSales);
+    plSet('pl-stmt-cogs',     costOfSales);
+    plSet('pl-stmt-indirect', indirectExp);
+    plSet('pl-gross',         grossProfit);
+    plSet('pl-net',           netProfit);
 
   } catch (err) {
     console.error('P&L Report error:', err);
@@ -1411,94 +1415,106 @@ async function loadProfitLossReport() {
 function printProfitLoss() {
   const fromEl = document.getElementById('pl-from');
   const toEl   = document.getElementById('pl-to');
-  const from = fromEl?.value || '';
-  const to   = toEl?.value   || '';
-  const range = (from && to) ? `${from} to ${to}` : 'All Time';
+  const from   = fromEl?.value || '';
+  const to     = toEl?.value   || '';
+  const range  = (from && to) ? `${from} to ${to}` : 'All Time';
 
   const getVal = id => document.getElementById(id)?.textContent || '৳0.00';
-  const row = (label, id, bold=false) =>
-    `<tr${bold?' style="font-weight:700"':''}><td>${label}</td><td style="text-align:right;font-family:monospace">${getVal(id)}</td></tr>`;
+  const getColor = id => document.getElementById(id)?.style.color || 'inherit';
 
-  const win = window.open('', '_blank', 'width=860,height=700');
+  const win = window.open('', '_blank', 'width=680,height=700');
   win.document.write(`<!DOCTYPE html><html><head>
-  <title>Profit / Loss Report</title>
+  <title>Profit & Loss Statement</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:'DM Sans',Arial,sans-serif;color:#1a2e22;background:#fff;padding:40px;font-size:13px}
-    h1{font-size:22px;font-weight:800;margin-bottom:4px}
+    h1{font-size:20px;font-weight:800;margin-bottom:2px}
     .sub{color:#6b8a74;font-size:12px;margin-bottom:28px}
-    .brand{font-size:13px;font-weight:700;margin-bottom:2px}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px}
+    .brand{font-size:12px;font-weight:700;color:#3caf82;margin-bottom:2px;text-transform:uppercase;letter-spacing:.06em}
+    .stmt{border:1px solid #e0ede7;border-radius:12px;overflow:hidden;max-width:480px;margin:0 auto}
+    .stmt-title{background:#f7faf8;padding:16px 24px;text-align:center;border-bottom:2px solid #e0ede7}
+    .stmt-title-label{font-size:10px;color:#7fa393;text-transform:uppercase;letter-spacing:.1em;margin-bottom:2px}
+    .stmt-title-text{font-size:16px;font-weight:800;color:#1a2e22}
+    .stmt-row{display:flex;justify-content:space-between;align-items:center;padding:12px 24px;border-bottom:1px solid #f0f6f2}
+    .stmt-row.separator{border-bottom:2px solid #e0ede7;border-top:1px solid #e0ede7;padding-top:13px;padding-bottom:13px}
+    .stmt-row.total{border-top:2px solid #1a2e22;border-bottom:none;padding-top:14px}
+    .lbl{font-size:13px;color:#3a5444}
+    .lbl .less{font-size:10px;color:#a8c5b8;margin-right:4px}
+    .lbl .hint{font-size:10px;color:#a8c5b8}
+    .val{font-family:monospace;font-weight:700;font-size:13px}
+    .val.red{color:#e05252}
+    .val.gross{font-size:15px;font-weight:800;color:#1a2e22}
+    .val.net{font-size:20px;font-weight:800}
+    .lbl.bold{font-size:13.5px;font-weight:700;color:#1a2e22}
+    .lbl.net{font-size:15px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
     .box{border:1px solid #e0ede7;border-radius:10px;overflow:hidden}
-    .box-title{background:#f7faf8;padding:10px 16px;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#4a6659;border-bottom:1px solid #e0ede7}
+    .box-title{background:#f7faf8;padding:9px 16px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#4a6659;border-bottom:1px solid #e0ede7}
     table{width:100%;border-collapse:collapse}
-    td{padding:9px 16px;border-bottom:1px solid #f0f6f2}
+    td{padding:8px 16px;border-bottom:1px solid #f0f6f2;font-size:12px}
     tr:last-child td{border-bottom:none}
-    .summary{border:2px solid #3caf82;border-radius:12px;padding:24px 28px;margin-bottom:20px}
-    .sum-row{display:flex;justify-content:space-between;align-items:baseline;padding:12px 0;border-bottom:1px solid #e0ede7}
-    .sum-row:last-child{border-bottom:none}
-    .sum-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7fa393}
-    .sum-val{font-size:24px;font-weight:800;font-family:monospace}
-    .sum-val.cogs{color:#1a2e22;font-size:20px}
-    .sum-val.gross{color:#3caf82}
-    .sum-val.net{font-size:28px}
-    .footer{text-align:center;color:#a8c5b8;font-size:11px;border-top:1px solid #e0ede7;padding-top:14px;margin-top:20px}
+    .footer{text-align:center;color:#a8c5b8;font-size:11px;border-top:1px solid #e0ede7;padding-top:14px;margin-top:24px}
     @media print{body{padding:20px}}
   </style></head><body>
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
-    <div>
-      <div class="brand">MangoLovers</div>
-      <h1>Profit / Loss Report</h1>
-      <div class="sub">Period: ${range} &nbsp;·&nbsp; Generated: ${new Date().toLocaleString()}</div>
-    </div>
+  <div style="margin-bottom:24px">
+    <div class="brand">MangoLovers</div>
+    <h1>Profit / Loss Report</h1>
+    <div class="sub">Period: ${range} &nbsp;·&nbsp; Generated: ${new Date().toLocaleString()}</div>
   </div>
-  <div class="grid">
+
+  <!-- Two-column cost/revenue side -->
+  <div class="two-col">
     <div class="box">
       <div class="box-title">Cost Side</div>
       <table>
-        ${row('Opening Stock (By purchase price)','pl-opening-cost')}
-        ${row('Opening Stock (By sale price)','pl-opening-sale')}
-        ${row('Total Purchase (Exc. tax, Discount)','pl-total-purchase',true)}
-        ${row('Total Stock Adjustment','pl-stock-adj')}
-        ${row('Total Expense','pl-expense')}
-        ${row('Total Purchase Shipping','pl-pur-shipping')}
-        ${row('Purchase Additional Expenses','pl-pur-addl')}
-        ${row('Total Transfer Shipping','pl-transfer-ship')}
-        ${row('Total Sell Discount','pl-sell-discount')}
-        ${row('Total Customer Reward','pl-cust-reward')}
-        ${row('Total Sell Return','pl-sell-return')}
+        <tr><td>Total Purchase</td><td style="text-align:right;font-family:monospace">${getVal('pl-total-purchase')}</td></tr>
+        <tr><td>Direct Expense (Transportation)</td><td style="text-align:right;font-family:monospace">${getVal('pl-pur-shipping')}</td></tr>
+        <tr><td>Additional Expenses</td><td style="text-align:right;font-family:monospace">${getVal('pl-pur-addl')}</td></tr>
+        <tr><td>Cost of Sales</td><td style="text-align:right;font-family:monospace">${getVal('pl-stock-adj')}</td></tr>
+        <tr><td>Indirect Expenses</td><td style="text-align:right;font-family:monospace">${getVal('pl-transfer-ship')}</td></tr>
+        <tr><td style="font-weight:700">Total Expense</td><td style="text-align:right;font-family:monospace;font-weight:700">${getVal('pl-expense')}</td></tr>
       </table>
     </div>
     <div class="box">
       <div class="box-title">Revenue Side</div>
       <table>
-        ${row('Closing Stock (By purchase price)','pl-closing-cost')}
-        ${row('Closing Stock (By sale price)','pl-closing-sale')}
-        ${row('Total Sales (Exc. tax, Discount)','pl-total-sales',true)}
-        ${row('Total Sell Shipping Charge','pl-sell-shipping')}
-        ${row('Sell Additional Expenses','pl-sell-addl')}
-        ${row('Total Stock Recovered','pl-stock-recovered')}
-        ${row('Total Purchase Return','pl-pur-return')}
-        ${row('Total Purchase Discount','pl-pur-discount')}
-        ${row('Total Sell Round Off','pl-sell-roundoff')}
+        <tr><td>Total Sales</td><td style="text-align:right;font-family:monospace">${getVal('pl-total-sales')}</td></tr>
+        <tr><td>Total Sale Shipping</td><td style="text-align:right;font-family:monospace">${getVal('pl-sell-shipping')}</td></tr>
+        <tr><td>Total Sale Discount</td><td style="text-align:right;font-family:monospace">${getVal('pl-sell-discount')}</td></tr>
+        <tr><td>Total Sale Round Off</td><td style="text-align:right;font-family:monospace">${getVal('pl-sell-roundoff')}</td></tr>
       </table>
     </div>
   </div>
-  <div class="summary">
-    <div class="sum-row">
-      <div><div class="sum-label">COGS</div><div style="font-size:11px;color:#a8c5b8;margin-top:3px">Opening Stock + Purchases − Closing Stock</div></div>
-      <div class="sum-val cogs">${getVal('pl-cogs')}</div>
+
+  <!-- P&L Statement -->
+  <div class="stmt">
+    <div class="stmt-title">
+      <div class="stmt-title-label">Statement</div>
+      <div class="stmt-title-text">Profit &amp; Loss</div>
     </div>
-    <div class="sum-row">
-      <div><div class="sum-label">Gross Profit</div><div style="font-size:11px;color:#a8c5b8;margin-top:3px">Total Sales − Total Purchases</div></div>
-      <div class="sum-val gross">${getVal('pl-gross')}</div>
+    <div class="stmt-row">
+      <div class="lbl">Net Sales / Revenue</div>
+      <div class="val">${getVal('pl-stmt-sales')}</div>
     </div>
-    <div class="sum-row">
-      <div><div class="sum-label">Net Profit</div><div style="font-size:11px;color:#a8c5b8;margin-top:3px">Gross Profit + Revenue additions − Cost deductions</div></div>
-      <div class="sum-val net" style="color:${document.getElementById('pl-net')?.style.color||'#3caf82'}">${getVal('pl-net')}</div>
+    <div class="stmt-row">
+      <div class="lbl"><span class="less">Less:</span> Cost of Sales <span class="hint">(Purchase + Transportation + Additional)</span></div>
+      <div class="val red">${getVal('pl-stmt-cogs')}</div>
+    </div>
+    <div class="stmt-row separator">
+      <div class="lbl bold">Gross Profit</div>
+      <div class="val gross" style="color:${getColor('pl-gross')}">${getVal('pl-gross')}</div>
+    </div>
+    <div class="stmt-row">
+      <div class="lbl"><span class="less">Less:</span> Indirect Expenses</div>
+      <div class="val red">${getVal('pl-stmt-indirect')}</div>
+    </div>
+    <div class="stmt-row total">
+      <div class="lbl net">Net Profit</div>
+      <div class="val net" style="color:${getColor('pl-net')}">${getVal('pl-net')}</div>
     </div>
   </div>
-  <div class="footer">MangoLovers Inventory System · Profit / Loss Report · ${new Date().toLocaleDateString()}</div>
+
+  <div class="footer">MangoLovers Inventory System &nbsp;·&nbsp; Profit / Loss Report &nbsp;·&nbsp; ${new Date().toLocaleDateString()}</div>
   </body></html>`);
   win.document.close();
   win.focus();
@@ -2000,20 +2016,22 @@ async function loadStockReport() {
     if (to)   saleRetQ = saleRetQ.lte('sales.sale_date', `${to}T23:59:59`);
     const { data: saleRetItems } = await saleRetQ;
 
-    /* ── 4. Purchase items in range (non-returned purchases) ── */
-    let purQ = db.from('supplier_purchase_items')
-      .select('item_id, quantity, supplier_purchases!inner(purchase_date, payment_status)')
-      .neq('supplier_purchases.payment_status', 'returned');
-    if (from) purQ = purQ.gte('supplier_purchases.purchase_date', `${from}T00:00:00`);
-    if (to)   purQ = purQ.lte('supplier_purchases.purchase_date', `${to}T23:59:59`);
+    /* ── 4. Purchase items in range (non-returned) — from supplier_purchases directly ── */
+    let purQ = db.from('supplier_purchases')
+      .select('item_id, quantity, purchase_date, payment_status')
+      .neq('payment_status', 'returned')
+      .not('item_id', 'is', null);
+    if (from) purQ = purQ.gte('purchase_date', `${from}T00:00:00`);
+    if (to)   purQ = purQ.lte('purchase_date', `${to}T23:59:59`);
     const { data: purItems } = await purQ;
 
     /* ── 5. Purchase returns in range ── */
-    let purRetQ = db.from('supplier_purchase_items')
-      .select('item_id, quantity, supplier_purchases!inner(purchase_date, payment_status)')
-      .eq('supplier_purchases.payment_status', 'returned');
-    if (from) purRetQ = purRetQ.gte('supplier_purchases.purchase_date', `${from}T00:00:00`);
-    if (to)   purRetQ = purRetQ.lte('supplier_purchases.purchase_date', `${to}T23:59:59`);
+    let purRetQ = db.from('supplier_purchases')
+      .select('item_id, quantity, purchase_date, payment_status')
+      .eq('payment_status', 'returned')
+      .not('item_id', 'is', null);
+    if (from) purRetQ = purRetQ.gte('purchase_date', `${from}T00:00:00`);
+    if (to)   purRetQ = purRetQ.lte('purchase_date', `${to}T23:59:59`);
     const { data: purRetItems } = await purRetQ;
 
     /* ── 6. Aggregate by item ── */
@@ -2063,7 +2081,13 @@ async function loadStockReport() {
     Object.values(agg).forEach(row => {
       row.netReturns  = row.saleReturns - row.purReturns;
       row.netMovement = row.stockIn - row.stockOut + row.netReturns;
-      row.stockValue  = row.currentStock > 0 ? row.costPrice / row.currentStock : 0;
+      // Stock Value = costPrice - (costPrice / totalQty) * soldQty
+      // totalQty = currentStock + netSoldQty (i.e. total ever available)
+      const _soldQty = Math.max(0, row.stockOut - row.saleReturns);
+      const _totalQty = row.currentStock + _soldQty;
+      row.stockValue  = _totalQty > 0
+        ? row.costPrice - (row.costPrice / _totalQty) * _soldQty
+        : 0;
     });
 
     _srData = Object.values(agg).sort((a,b) => (b.stockIn + b.stockOut) - (a.stockIn + a.stockOut));
