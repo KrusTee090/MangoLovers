@@ -781,3 +781,7 @@ tbody tr:hover .act-group { opacity:1; }
 
 #pl-summary-card .pl-block { padding: 22px 0; border-bottom: 1px solid var(--border); }
 #pl-summary-card .pl-block:last-child { border-bottom: none; padding-bottom: 0; }
+/* ── Smaller mini-stats for Sales & Purchases ── */
+.mini-stat-sm { padding:10px 13px !important; gap:9px !important; }
+.mini-stat-icon-sm { width:30px !important; height:30px !important; border-radius:8px !important; }
+.mini-stat-val-sm { font-size:15px !important; }
