@@ -635,7 +635,7 @@ function viewProduct(p) {
    EDIT PRODUCT MODAL
 ══════════════════════════════════ */
 function editProduct(p) {
-  const cats = [...new Set(products.map(x => x.category))];
+  const cats = (typeof ML_CATS !== 'undefined') ? ML_CATS : [...new Set(products.map(x => x.category))];
   openPanel(`
     <div class="feat-hdr">
       <div><h3>Edit Product</h3><p>${p.name}</p></div>
@@ -652,7 +652,9 @@ function editProduct(p) {
       </div>
       <div class="feat-row">
         <div class="feat-field"><label>Category</label>
-          <select id="ep-cat">${cats.map(c=>`<option value="${c}" ${c===p.category?'selected':''}>${c}</option>`).join('')}</select>
+          <select id="ep-cat">
+            ${[...new Set([...cats, p.category].filter(Boolean))].map(c=>`<option value="${c}" ${c===p.category?'selected':''}>${c}</option>`).join('')}
+          </select>
         </div>
         <div class="feat-field"><label>Selling Price (৳)</label>
           <input id="ep-price" type="number" step="0.01" value="${p.price}"></div>

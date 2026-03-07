@@ -593,6 +593,21 @@ document.addEventListener('click', e => {
   }
 });
 
+
+/* ── MangoLovers product categories ── */
+const ML_CATS = [
+  'গুড় (Molasses)',
+  'মধু (Honey)',
+  'বাদাম (Nuts)',
+  'বীজ (Seeds)',
+  'ঘি (Ghee)',
+  'তেল (Oil)',
+  'আচার (Pickle)',
+  'রস (Juice)',
+  'শুকনো খাবার (Dry Foods)',
+  'অন্যান্য (Others)',
+];
+
 let pCatFilter='All', pStatFilter='All';
 function renderCatPills(){
   const cats=['All',...new Set(products.map(p=>p.category))];
@@ -727,6 +742,19 @@ function renderSalesTable(){
   const q=document.getElementById('salesSearch').value.toLowerCase();
   const filt=recentSales.filter(s=>(s.customer.toLowerCase().includes(q)||s.id.toLowerCase().includes(q))&&(salesFilter==='All'||s.status===salesFilter)&&_dateInRange(s.date,_salesDateFilter));
 
+  // Update sales mini-stats
+  const _salNonRet   = recentSales.filter(s => s.status !== 'Returned');
+  const _salRevenue  = _salNonRet.reduce((sum, s) => sum + (s.total||0), 0);
+  const _salCount    = _salNonRet.length;
+  const _salPendArr  = _salNonRet.filter(s => s.status === 'Pending');
+  const _salPending  = _salPendArr.length;
+  const _salPendRev  = _salPendArr.reduce((sum, s) => sum + (s.total||0), 0);
+  const _ssel = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  _ssel('sales-stat-revenue',     '৳' + _salRevenue.toLocaleString('en-IN', {minimumFractionDigits:0}));
+  _ssel('sales-stat-count',       _salCount);
+  _ssel('sales-stat-pending',     _salPending);
+  _ssel('sales-stat-pending-val', '৳' + _salPendRev.toLocaleString('en-IN', {minimumFractionDigits:0}));
+
   document.getElementById('salesTbody').innerHTML=filt.map((s,i)=>`<tr style="animation:fadeUp .3s ease ${i*45}ms both;${s.status==='Returned'?'opacity:.6':''}">
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${s.id}</span></td>
     <td><div style="display:flex;align-items:center;gap:7px">
@@ -793,15 +821,17 @@ function renderPurchases(){
   }
 
   // Update mini-stats from full purchases array (not filtered)
-  const _purTotal = purchases.length;
-  const _purValue = purchases.filter(p => (p.status||'').toLowerCase() !== 'returned').reduce((s, p) => s + (p.productPrice||0) + (p.directExpense||0) + (p.additionalExpense||0), 0);
-  const _purPending = purchases.filter(p => (p.status||'').toLowerCase() === 'pending').length;
-  const _elPOs  = document.querySelector('#page-purchases .mini-stat:nth-child(1) .mini-stat-val');
-  const _elVal  = document.querySelector('#page-purchases .mini-stat:nth-child(2) .mini-stat-val');
-  const _elPend = document.querySelector('#page-purchases .mini-stat:nth-child(3) .mini-stat-val');
-  if (_elPOs)  _elPOs.textContent  = _purTotal;
-  if (_elVal)  _elVal.textContent  = '৳' + _purValue.toLocaleString('en-IN', {minimumFractionDigits:0});
-  if (_elPend) _elPend.textContent = _purPending;
+  const _purNonRet = purchases.filter(p => (p.status||'').toLowerCase() !== 'returned');
+  const _purTotal   = _purNonRet.length;
+  const _purValue   = _purNonRet.reduce((s, p) => s + (p.productPrice||0) + (p.directExpense||0) + (p.additionalExpense||0), 0);
+  const _purPendArr = _purNonRet.filter(p => (p.status||'').toLowerCase() === 'pending');
+  const _purPending = _purPendArr.length;
+  const _purPendVal = _purPendArr.reduce((s, p) => s + (p.productPrice||0) + (p.directExpense||0) + (p.additionalExpense||0), 0);
+  const _setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  _setEl('pur-stat-count',       _purTotal);
+  _setEl('pur-stat-value',       '৳' + _purValue.toLocaleString('en-IN', {minimumFractionDigits:0}));
+  _setEl('pur-stat-pending',     _purPending);
+  _setEl('pur-stat-pending-val', '৳' + _purPendVal.toLocaleString('en-IN', {minimumFractionDigits:0}));
 
   document.getElementById('purchasesTbody').innerHTML=filtered.map((po,i)=>{
     // Re-resolve supplier name live from suppliersData in case it wasn't set at load time
@@ -988,7 +1018,15 @@ function renderAnalytics(){
 
 
 /* ── MODAL ── */
-function openModal(){document.getElementById('modalOverlay').classList.add('open');}
+function openModal(){
+  document.getElementById('modalOverlay').classList.add('open');
+  const catSel = document.getElementById('ap-category');
+  if (catSel && typeof ML_CATS !== 'undefined') {
+    const current = catSel.value;
+    catSel.innerHTML = '<option value="">— Select Category —</option>' +
+      ML_CATS.map(c => `<option value="${c}"${c===current?' selected':''}>${c}</option>`).join('');
+  }
+}
 function closeModal(){document.getElementById('modalOverlay').classList.remove('open');}
 function submitProduct(e){e.preventDefault();closeModal();}
 document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal();});
