@@ -479,9 +479,22 @@ function viewInvoice(sale) {
           <tr><td colspan="4" style="padding:14px;text-align:center;color:var(--text-faint);font-size:12px">Loading items…</td></tr>
         </tbody>
       </table>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 10px;border-top:2px solid var(--border);margin-top:0">
-        <span style="font-size:12px;font-weight:700;color:var(--text-soft)">TOTAL</span>
-        <span id="inv-total-display" style="font-size:22px;font-weight:800;color:var(--mint);font-family:monospace">৳${sale.total.toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
+      <div style="border-top:2px solid var(--border);padding:10px 10px 4px;margin-top:0">
+        ${(sale.discount||0)>0?`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
+          <span style="font-size:12px;color:var(--text-soft)">Subtotal</span>
+          <span style="font-size:13px;font-family:monospace">৳${((sale.total||0)+(sale.discount||0)).toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
+          <span style="font-size:12px;color:var(--red)">Discount</span>
+          <span style="font-size:13px;font-weight:600;font-family:monospace;color:var(--red)">− ৳${(sale.discount||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0 4px;border-top:1px solid var(--border);margin-top:4px">`:`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0 4px">`}
+          <span style="font-size:12px;font-weight:700;color:var(--text-soft)">TOTAL</span>
+          <span id="inv-total-display" style="font-size:22px;font-weight:800;color:var(--mint);font-family:monospace">৳${(sale.total||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
+        </div>
+        ${(sale.discount||0)>0?'</div>':''}
       </div>
     </div>
     <div class="feat-footer">
@@ -867,10 +880,28 @@ function viewCustomer(c) {
     </div>
     <div class="feat-footer">
       <button class="btn btn-outline" onclick="closePanel()">Close</button>
+      <button class="btn btn-danger" style="background:#e53935;color:#fff;border:none" onclick="closePanel();_deleteCustomerFromView(window._viewCust)">Delete</button>
       <button class="btn btn-primary" onclick="closePanel();editCustomer(window._viewCust)">Edit Customer</button>
     </div>
   `, '480px');
   window._viewCust = c;
+}
+
+function _deleteCustomerFromView(c) {
+  if (!c) return;
+  const idx = customers.findIndex(x => x.id === c.id);
+  if (!confirm('Delete customer "' + c.name + '"?\nThis cannot be undone.')) return;
+  if (typeof deleteCustomerFromDB === 'function') {
+    deleteCustomerFromDB(c.id).then(r => {
+      if (r.success) {
+        if (idx !== -1) customers.splice(idx, 1);
+        renderCustomers();
+        toast('Customer deleted', 'success');
+      } else {
+        toast(r.error || 'Delete failed', 'error');
+      }
+    });
+  }
 }
 
 /* ══════════════════════════════════
@@ -1687,7 +1718,7 @@ function _npoCalcTotal() {
 
 function openNewPO() {
   const supplierOptions = suppliersData.map(s =>
-    `<option value="${s.name}">${s.name}</option>`).join('');
+    `<option value="${s.id}" data-name="${s.name}">${s.name}</option>`).join('');
   const itemOptions = products.map(p =>
     `<option value="${p.id}" data-name="${p.name}">${p.id} — ${p.name}</option>`).join('');
 
@@ -1775,7 +1806,9 @@ function openNewPO() {
 
 
 async function _submitNewPO() {
-  const supplierName  = document.getElementById('npo-supplier')?.value?.trim();
+  const supplierSel   = document.getElementById('npo-supplier');
+  const supplierId    = supplierSel?.value?.trim() || null;
+  const supplierName  = supplierSel?.options[supplierSel?.selectedIndex]?.dataset?.name || '';
   const paymentStatus = document.getElementById('npo-status')?.value;
   const itemId        = document.getElementById('npo-item')?.value?.trim() || null;
   const itemName      = document.getElementById('npo-item-search')?.value?.trim() || '';
@@ -1784,7 +1817,7 @@ async function _submitNewPO() {
   const directExpense    = parseFloat(document.getElementById('npo-direct-expense')?.value)   || 0;
   const additionalExpense= parseFloat(document.getElementById('npo-additional-expense')?.value)|| 0;
 
-  if (!supplierName) { toast('Please select a supplier', 'error'); return; }
+  if (!supplierId)   { toast('Please select a supplier', 'error'); return; }
   if (!itemId)       { toast('Please select an item', 'error');    return; }
   if (qty <= 0)      { toast('Quantity must be greater than 0', 'error'); return; }
   if (total <= 0)    { toast('Total must be greater than 0', 'error'); return; }
@@ -1794,7 +1827,7 @@ async function _submitNewPO() {
 
   const lineItems = [{ name: itemName, itemId, qty }];
   const result = typeof savePurchaseToDB === 'function'
-    ? await savePurchaseToDB({ supplierName, paymentStatus, productPrice: qty * total, total: (qty * total) + directExpense + additionalExpense, directExpense, additionalExpense, lineItems })
+    ? await savePurchaseToDB({ supplierId, supplierName, paymentStatus, productPrice: qty * total, total: (qty * total) + directExpense + additionalExpense, directExpense, additionalExpense, lineItems })
     : { success: false, error: 'DB not connected' };
 
   if (result.success) {
@@ -1840,6 +1873,17 @@ function _suppAction(action, idx) {
   if (!s) return;
   if (action === 'view') viewSupplier(s);
   if (action === 'edit') editSupplier(s);
+  if (action === 'delete') _confirmDeleteSupplier(s, idx);
+}
+
+function _confirmDeleteSupplier(s, idx) {
+  if (!confirm(`Delete supplier "${s.name}"?\nThis cannot be undone.`)) return;
+  if (typeof deleteSupplierFromDB === 'function') {
+    deleteSupplierFromDB(s.id).then(r => {
+      if (r.success) { suppliersData.splice(idx, 1); renderSuppliers(); toast('Supplier deleted', 'success'); }
+      else toast(r.error || 'Delete failed', 'error');
+    });
+  }
 }
 
 /* WIRE UP: Customer cards */
@@ -1848,6 +1892,19 @@ window.renderCustomers = function(filter = '') { _origRenderCustomers(filter); }
 function _custAction(idx) {
   const c = customers[idx];
   if (c) viewCustomer(c);
+}
+
+function _deleteCustomer(idx, event) {
+  if (event) event.stopPropagation();
+  const c = customers[idx];
+  if (!c) return;
+  if (!confirm(`Delete customer "${c.name}"?\nThis cannot be undone.`)) return;
+  if (typeof deleteCustomerFromDB === 'function') {
+    deleteCustomerFromDB(c.id).then(r => {
+      if (r.success) { customers.splice(idx, 1); renderCustomers(); toast('Customer deleted', 'success'); }
+      else toast(r.error || 'Delete failed', 'error');
+    });
+  }
 }
 
 /* WIRE UP: Invoices — inline onclick, no wrapper needed */
@@ -1901,9 +1958,23 @@ function viewPurchaseOrder(po) {
           <tr><td colspan="4" style="padding:14px;text-align:center;color:var(--text-faint);font-size:12px">Loading items…</td></tr>
         </tbody>
       </table>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 10px;border-top:2px solid var(--border)">
-        <span style="font-size:12px;font-weight:700;color:var(--text-soft)">TOTAL</span>
-        <span style="font-size:22px;font-weight:800;color:var(--mint);font-family:monospace">৳${po.total.toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
+      <div style="border-top:2px solid var(--border);padding:10px 10px 4px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
+          <span style="font-size:12px;color:var(--text-soft)">Product Price</span>
+          <span style="font-size:13px;font-weight:600;font-family:monospace">৳${(po.productPrice||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
+        </div>
+        ${(po.directExpense||0)>0?`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
+          <span style="font-size:12px;color:var(--text-soft)">Direct Expense</span>
+          <span style="font-size:13px;font-weight:600;font-family:monospace">+ ৳${(po.directExpense||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
+        </div>`:''}
+        ${(po.additionalExpense||0)>0?`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
+          <span style="font-size:12px;color:var(--text-soft)">Additional Expense</span>
+          <span style="font-size:13px;font-weight:600;font-family:monospace">+ ৳${(po.additionalExpense||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
+        </div>`:''}
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0 4px;border-top:1px solid var(--border);margin-top:4px">
+          <span style="font-size:12px;font-weight:700;color:var(--text-soft)">TOTAL</span>
+          <span style="font-size:22px;font-weight:800;color:var(--mint);font-family:monospace">৳${((po.productPrice||0)+(po.directExpense||0)+(po.additionalExpense||0)).toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
+        </div>
       </div>
     </div>
     <div class="feat-footer">

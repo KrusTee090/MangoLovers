@@ -347,7 +347,7 @@
       </div>
       <div class="card">
         <div class="tbl-wrap"><table>
-          <thead><tr><th>Product</th><th>SKU</th><th>Category</th><th>Stock</th><th>Price</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th onclick="sortProducts('name')" style="cursor:pointer;user-select:none">Product ⇅</th><th onclick="sortProducts('sku')" style="cursor:pointer;user-select:none">SKU ⇅</th><th>Category</th><th onclick="sortProducts('stock')" style="cursor:pointer;user-select:none">Stock ⇅</th><th onclick="sortProducts('price')" style="cursor:pointer;user-select:none">Price ⇅</th><th>Status</th><th></th></tr></thead>
           <tbody id="productsTbody"></tbody>
         </table></div>
         <div class="pagination">
@@ -438,15 +438,15 @@
         <div class="mini-stat fade-up d3"><div class="mini-stat-icon" style="background:#f3f0fd"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="mini-stat-val" style="color:var(--purple)">2</div><div class="mini-stat-lbl">Pending</div></div></div>
         <div class="mini-stat fade-up d4"><div class="mini-stat-icon" style="background:var(--red-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg></div><div><div class="mini-stat-val" style="color:var(--red)">1</div><div class="mini-stat-lbl">Overdue</div></div></div>
       </div>
-      <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center">
+      <div style="display:flex;gap:10px;margin-bottom:8px;align-items:center">
         <div class="fsearch" style="flex:1"><span class="icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><input type="text" placeholder="Search by supplier or PO number…" id="purchasesSearch"></div>
-        <div style="display:flex;gap:6px">
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
           <div class="pill active" onclick="filterPurchases('All',this)">All</div>
           <div class="pill" onclick="filterPurchases('Received',this)">Received</div>
           <div class="pill" onclick="filterPurchases('Pending',this)">Pending</div>
           <div class="pill" onclick="filterPurchases('Overdue',this)">Overdue</div>
         </div>
-      </div>
       <div class="card"><div class="tbl-wrap"><table>
         <thead><tr><th>PO Number</th><th>Supplier</th><th>Items</th><th>Product Price</th><th>Direct Exp.</th><th>Add. Exp.</th><th>Total</th><th>Status</th><th>Order Date</th><th>Due Date</th><th></th></tr></thead>
         <tbody id="purchasesTbody"></tbody>
@@ -496,12 +496,7 @@
           <span class="icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
           <input type="text" placeholder="Search description…" id="expSearch" oninput="renderExpenses()">
         </div>
-        <div style="display:flex;gap:6px">
-          <div class="pill active" id="exp-pill-all"   onclick="expQuickFilter('all',this)">All</div>
-          <div class="pill"        id="exp-pill-today" onclick="expQuickFilter('today',this)">Today</div>
-          <div class="pill"        id="exp-pill-week"  onclick="expQuickFilter('week',this)">This Week</div>
-          <div class="pill"        id="exp-pill-month" onclick="expQuickFilter('month',this)">This Month</div>
-        </div>
+
       </div>
 
       <div class="card">
@@ -945,8 +940,8 @@
           <table id="sr-table">
             <thead>
               <tr>
-                <th>Item ID</th>
-                <th>Item Name</th>
+                <th onclick="sortStock('id')" style="cursor:pointer;user-select:none">Item ID ⇅</th>
+                <th onclick="sortStock('name')" style="cursor:pointer;user-select:none">Item Name ⇅</th>
                 <th>Unit</th>
                 <th style="text-align:center">
                   <span style="color:var(--green)">▲ Stock In</span>

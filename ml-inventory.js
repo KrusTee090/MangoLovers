@@ -606,12 +606,26 @@ function setCatF(cat,el){
   el.classList.add('active');
   renderProducts();
 }
+
+let _productSort = 'name-asc';
+function sortProducts(col) {
+  _productSort = _productSort === col+'-asc' ? col+'-desc' : col+'-asc';
+  renderProducts();
+}
+
 function renderProducts(){
   const q=document.getElementById('productSearch').value.toLowerCase();
-  const filt=products.filter(p=>{
+  let filt=products.filter(p=>{
     return (p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q))
       &&(pCatFilter==='All'||p.category===pCatFilter)
       &&(pStatFilter==='All'||p.status===pStatFilter);
+  });
+  const [psCol,psDir]=_productSort.split('-');
+  filt=[...filt].sort((a,b)=>{
+    const av=psCol==='name'?a.name:psCol==='sku'?a.sku:psCol==='stock'?a.stock:psCol==='price'?a.price:0;
+    const bv=psCol==='name'?b.name:psCol==='sku'?b.sku:psCol==='stock'?b.stock:psCol==='price'?b.price:0;
+    const cmp=typeof av==='string'?av.localeCompare(bv):av-bv;
+    return psDir==='asc'?cmp:-cmp;
   });
   document.getElementById('productsSubtitle').textContent=`${filt.length} of ${products.length} products`;
   document.getElementById('productsPagInfo').textContent=`Showing ${filt.length} of ${products.length}`;
@@ -656,6 +670,54 @@ function renderCategories(){
   </tr>`).join('');
 }
 
+
+/* ══ DATE PERIOD FILTERS ══ */
+let _salesDateFilter = 'all';
+let _purchasesDateFilter = 'all';
+let _returnsDateFilter = 'all';
+
+function _dateInRange(dateStr, range) {
+  if (!dateStr || dateStr === '—' || range === 'all') return true;
+  const now = new Date();
+  const d = new Date(dateStr.replace(' ', 'T'));
+  if (isNaN(d)) return true;
+  const pad = n => String(n).padStart(2,'0');
+  const today = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+  const ds = d.toISOString().split('T')[0];
+  if (range === 'today') return ds === today;
+  if (range === 'week') {
+    const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
+    return d >= weekAgo;
+  }
+  if (range === 'month') {
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }
+  if (range === 'year') return d.getFullYear() === now.getFullYear();
+  return true;
+}
+
+function salesDateFilter(range, el) {
+  _salesDateFilter = range;
+  el.closest('.pill-bar').querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  renderSalesTable();
+}
+
+function purchasesDateFilter(range, el) {
+  _purchasesDateFilter = range;
+  el.closest('.pill-bar').querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  renderPurchases();
+}
+
+function returnsDateFilter(range, el) {
+  _returnsDateFilter = range;
+  el.closest('.pill-bar').querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  renderSalesReturnsTable();
+  renderPurchaseReturnsTable();
+}
+
 let salesFilter='All';
 function filterSales(s,el){
   salesFilter=s;
@@ -665,7 +727,8 @@ function filterSales(s,el){
 }
 function renderSalesTable(){
   const q=document.getElementById('salesSearch').value.toLowerCase();
-  const filt=recentSales.filter(s=>(s.customer.toLowerCase().includes(q)||s.id.toLowerCase().includes(q))&&(salesFilter==='All'||s.status===salesFilter));
+  const filt=recentSales.filter(s=>(s.customer.toLowerCase().includes(q)||s.id.toLowerCase().includes(q))&&(salesFilter==='All'||s.status===salesFilter)&&_dateInRange(s.date,_salesDateFilter));
+
   document.getElementById('salesTbody').innerHTML=filt.map((s,i)=>`<tr style="animation:fadeUp .3s ease ${i*45}ms both;${s.status==='Returned'?'opacity:.6':''}">
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${s.id}</span></td>
     <td><div style="display:flex;align-items:center;gap:7px">
@@ -722,7 +785,7 @@ function renderPurchases(){
       po.id.toLowerCase().includes(search) ||
       po.supplier.toLowerCase().includes(search) ||
       (po.itemSummary || '').toLowerCase().includes(search);
-    return matchStatus && matchSearch;
+    return matchStatus && matchSearch && _dateInRange(po.date, _purchasesDateFilter);
   });
 
   if (filtered.length === 0) {
@@ -731,14 +794,19 @@ function renderPurchases(){
     return;
   }
 
-  document.getElementById('purchasesTbody').innerHTML=filtered.map((po,i)=>`<tr style="animation:fadeUp .3s ease ${i*55}ms both;${po.status==='Returned'?'opacity:.6':''}">
+  document.getElementById('purchasesTbody').innerHTML=filtered.map((po,i)=>{
+    // Re-resolve supplier name live from suppliersData in case it wasn't set at load time
+    const suppName = (typeof suppliersData !== 'undefined' && po._supplierId)
+      ? (suppliersData.find(s => String(s.id) === String(po._supplierId))?.name || po.supplier || '—')
+      : (po.supplier || '—');
+    return `<tr style="animation:fadeUp .3s ease ${i*55}ms both;${po.status==='Returned'?'opacity:.6':''}">
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${po.id}</span></td>
-    <td style="font-weight:600">${po.supplier}</td>
+    <td style="font-weight:600">${suppName}</td>
     <td><div style="font-size:11.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${po.itemSummary||''}"><span class="mono" style="color:var(--text-soft)">${po.items}</span> · ${po.itemSummary||'—'}</div></td>
-    <td><span class="mono" style="font-weight:700">৳${po.total.toLocaleString()}</span></td>
+    <td><span class="mono" style="font-weight:700">৳${(po.productPrice||0).toLocaleString()}</span></td>
     <td><span class="mono" style="font-size:12px;color:${po.directExpense>0?'var(--blue)':'var(--text-faint)'}">৳${(po.directExpense||0).toLocaleString()}</span></td>
     <td><span class="mono" style="font-size:12px;color:${po.additionalExpense>0?'var(--purple)':'var(--text-faint)'}">৳${(po.additionalExpense||0).toLocaleString()}</span></td>
-    <td><span class="mono" style="font-weight:700;color:var(--mint)">৳${((po.total||0)+(po.directExpense||0)+(po.additionalExpense||0)).toLocaleString()}</span></td>
+    <td><span class="mono" style="font-weight:700;color:var(--mint)">৳${((po.productPrice||0)+(po.directExpense||0)+(po.additionalExpense||0)).toLocaleString()}</span></td>
     <td>${statusBadge(po.status)}</td>
     <td><span class="mono" style="font-size:11.5px;color:var(--text-soft)">${po.date}</span></td>
     <td><span class="mono" style="font-size:11.5px;${po.status==='Overdue'?'color:var(--red);font-weight:700':'color:var(--text-soft)'}">${po.dueDate}</span></td>
@@ -751,7 +819,8 @@ function renderPurchases(){
         : `<button class="act-btn danger" title="Mark as Returned" onclick="_poAction('return',${purchases.indexOf(po)})">${svgIcon(rotateSvg,12)}</button>`
       }
     </div></td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 
 function renderCustomers(filter=''){
@@ -790,6 +859,7 @@ function renderSuppliers(){
     <td><div class="act-group" style="opacity:1">
       <button class="act-btn" title="View" onclick="_suppAction('view',${i})">${svgIcon(eyeSvg,12)}</button>
       <button class="act-btn edit" title="Edit" onclick="_suppAction('edit',${i})">${svgIcon(editSvg,12)}</button>
+      <button class="act-btn danger" title="Delete" onclick="_suppAction('delete',${i})">${svgIcon(trashSvg,12)}</button>
     </div></td>
   </tr>`).join('');
 }
@@ -824,7 +894,8 @@ function renderSalesReturns(){
       </div>
     </td></tr>`;
   } else {
-    tbody.innerHTML = salesReturns.map((r,i) => `<tr style="animation:fadeUp .3s ease ${i*45}ms both">
+    const _srFiltered = salesReturns.filter(r => _dateInRange(r.date, _returnsDateFilter));
+    tbody.innerHTML = _srFiltered.map((r,i) => `<tr style="animation:fadeUp .3s ease ${i*45}ms both">
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${r.id}</span></td>
     <td><span class="mono" style="color:var(--text-soft);font-size:11.5px">${r.invoiceId}</span></td>
     <td>${r.customer}</td>
@@ -834,8 +905,8 @@ function renderSalesReturns(){
     <td style="font-size:12px;color:var(--text-soft)">${r.date}</td>
     <td>${statusBadge(r.status)}</td>
     <td><div class="act-group">
-      <button class="act-btn" title="View" onclick="viewSalesReturn(salesReturns[${i}])">${svgIcon(eyeSvg,12)}</button>
-      <button class="act-btn" title="Print" onclick="printSalesReturn(salesReturns[${i}])">${svgIcon(printSvg,12)}</button>
+      <button class="act-btn" title="View" onclick="viewSalesReturn(_srFiltered[${i}])">${svgIcon(eyeSvg,12)}</button>
+      <button class="act-btn" title="Print" onclick="printSalesReturn(_srFiltered[${i}])">${svgIcon(printSvg,12)}</button>
     </div></td>
   </tr>`).join('');
   }
@@ -865,7 +936,8 @@ function renderPurchaseReturns(){
       </div>
     </td></tr>`;
   } else {
-    tbody.innerHTML = purchaseReturns.map((r,i) => `<tr style="animation:fadeUp .3s ease ${i*45}ms both">
+    const _prFiltered = purchaseReturns.filter(r => _dateInRange(r.date, _returnsDateFilter));
+        tbody.innerHTML = purchaseReturns.map((r,i) => `<tr style="animation:fadeUp .3s ease ${i*45}ms both">
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${r.id}</span></td>
     <td><span class="mono" style="color:var(--text-soft);font-size:11.5px">${r.poId}</span></td>
     <td style="font-weight:600">${r.supplier}</td>
@@ -921,7 +993,7 @@ function renderFinancialSummary() {
 document.querySelectorAll('#page-dashboard .fade-up').forEach(el=>el.classList.remove('fade-up'));
 
 /* ══ EXPENSES ══ */
-let expensesData = [];
+var expensesData = [];
 let _expFilter   = 'all';
 
 function expQuickFilter(range, el) {

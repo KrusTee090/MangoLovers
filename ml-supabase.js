@@ -293,6 +293,25 @@ async function saveProduct(formData) {
 /* ═══════════════════════════════════════════════════════════
    CUSTOMERS
    ═══════════════════════════════════════════════════════════ */
+
+/* ══ DELETE CUSTOMER ══ */
+async function deleteCustomerFromDB(customerId) {
+  try {
+    const { error } = await db.from('customers').delete().eq('customer_id', customerId);
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch(e) { return { success: false, error: e.message }; }
+}
+
+/* ══ DELETE SUPPLIER ══ */
+async function deleteSupplierFromDB(supplierId) {
+  try {
+    const { error } = await db.from('suppliers').delete().eq('supplier_id', supplierId);
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch(e) { return { success: false, error: e.message }; }
+}
+
 async function loadCustomers() {
   try {
     const { data, error } = await db
@@ -301,16 +320,39 @@ async function loadCustomers() {
       .order('created_at', { ascending: false });
     if (error) throw error;
 
-    const mapped = (data || []).map(row => ({
-      id:             row.id,
-      name:           row.name,
-      phone:          row.phone || '—',
-      email:          row.email || '—',
-      totalPurchases: 0,
-      totalSpent:     0,
-      outstanding:    0,
-      status:         'Active',
-    }));
+    // Fetch sales aggregates per customer (non-returned only)
+    const { data: salesData } = await db
+      .from('sales')
+      .select('customer_id, total_amount, paid_amount, payment_status')
+      .neq('payment_status', 'returned');
+
+    // Build per-customer stats map
+    const statsMap = {};
+    (salesData || []).forEach(s => {
+      const cid = s.customer_id;
+      if (!cid) return;
+      if (!statsMap[cid]) statsMap[cid] = { count: 0, spent: 0, outstanding: 0 };
+      const total = parseFloat(s.total_amount || 0);
+      const paid  = parseFloat(s.paid_amount  || 0);
+      statsMap[cid].count++;
+      statsMap[cid].spent       += total;
+      statsMap[cid].outstanding += Math.max(0, total - paid);
+    });
+
+    const mapped = (data || []).map(row => {
+      const cid   = row.customer_id || row.id;
+      const stats = statsMap[cid] || { count: 0, spent: 0, outstanding: 0 };
+      return {
+        id:             cid,
+        name:           row.name,
+        phone:          row.phone || '—',
+        email:          row.email || '—',
+        totalPurchases: stats.count,
+        totalSpent:     stats.spent,
+        outstanding:    stats.outstanding,
+        status:         'Active',
+      };
+    });
 
     customers.length = 0;
     mapped.forEach(c => customers.push(c));
@@ -461,6 +503,10 @@ async function loadSales() {
 /* ═══════════════════════════════════════════════════════════
    PURCHASES (supplier_purchases)
    ═══════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   UPDATED: LOAD PURCHASES 
+   Uses a join to get the supplier name directly from the DB.
+   ═══════════════════════════════════════════════════════════ */
 async function loadPurchases() {
   try {
     const { data, error } = await db
@@ -468,6 +514,7 @@ async function loadPurchases() {
         .select(`
           id, total_amount, purchase_date, payment_status, paid_amount,
           quantity, item_id, supplier_id, direct_expense, additional_expense,
+          suppliers!supplier_id(name),
           items!item_id(id, name, uom)
         `)
         .order('purchase_date', { ascending: false })
@@ -478,30 +525,20 @@ async function loadPurchases() {
     const statusMap = { paid: 'Received', pending: 'Pending', partial_paid: 'In Transit', partial: 'In Transit', returned: 'Returned' };
 
     const mapped = (data || []).map(row => {
-      // Resolve supplier name from in-memory suppliersData (reliable, no join needed)
-      let supplierName = null;
-      if (row.supplier_id) {
-        const found = (typeof suppliersData !== 'undefined' ? suppliersData : [])
-          .find(s => s.id === row.supplier_id);
-        supplierName = found?.name || null;
-      }
-      supplierName = supplierName || '—';
+      // Access the joined supplier name directly
+      const supplierName = row.suppliers?.name || '—';
 
-      // Build line item directly from supplier_purchases row fields
       const itemObj = Array.isArray(row.items) ? row.items[0] : row.items;
+      const paidAmt  = parseFloat(row.paid_amount) || 0;
+      const qty      = row.quantity || 0;
       const lineItems = itemObj ? [{
-        name:      itemObj.name || 'Unknown Item',
-        uom:       itemObj.uom  || '',
-        qty:       row.quantity || 0,
-        unitPrice: parseFloat(itemObj.cost_price) || (row.quantity > 0 ? parseFloat(row.total_amount) / row.quantity : 0),
-        subtotal:  parseFloat(row.total_amount) || 0,
+        name: itemObj.name || 'Unknown Item',
+        uom: itemObj.uom || '',
+        qty: qty,
+        unitPrice: qty > 0 ? paidAmt / qty : 0,
+        subtotal: paidAmt,
       }] : [];
 
-      const itemSummary = lineItems.length
-        ? lineItems.map(li => li.name.length > 30 ? li.name.slice(0, 28) + '…' : li.name).join(', ')
-        : '—';
-
-      // Safe date calculations
       let d = '—', due = '—';
       if (row.purchase_date) {
         try {
@@ -514,36 +551,27 @@ async function loadPurchases() {
       }
 
       return {
-        _dbId:       row.id,
-        id:          'PO-' + String(row.id).slice(0, 8).toUpperCase(),
-        supplier:    supplierName,
-        items:       lineItems.length || 1,
-        itemSummary: itemSummary,
-        total:          parseFloat(row.total_amount) || 0,
-        directExpense:  parseFloat(row.direct_expense)     || 0,
+        _dbId: row.id,
+        id: 'PO-' + String(row.id).slice(0, 8).toUpperCase(),
+        _supplierId: row.supplier_id || null,
+        supplier: supplierName,
+        items: lineItems.length || 1,
+        itemSummary: lineItems.length ? lineItems[0].name : '—',
+        productPrice: parseFloat(row.paid_amount) || 0,
+        total: parseFloat(row.total_amount) || 0,
+        paidAmount: parseFloat(row.paid_amount) || 0,
+        directExpense: parseFloat(row.direct_expense) || 0,
         additionalExpense: parseFloat(row.additional_expense) || 0,
-        paidAmount:  parseFloat(row.paid_amount)  || 0,
-        status:      statusMap[row.payment_status] || 'Pending',
-        date:        d,
-        dueDate:     due,
-        lineItems:   lineItems,
+        status: statusMap[row.payment_status] || 'Pending',
+        date: d,
+        dueDate: due,
+        lineItems: lineItems,
       };
     });
 
     purchases.length = 0;
     mapped.forEach(p => purchases.push(p));
     renderPurchases();
-
-    /* ── Update mini-stats on purchases page ── */
-    const totalVal  = purchases.filter(p => p.status !== 'Returned').reduce((s, p) => s + p.total, 0);
-    const pendingCt = purchases.filter(p => p.status === 'Pending' || p.status === 'In Transit').length;
-    const overdueCt = purchases.filter(p => p.status === 'Overdue').length;
-    const ms = document.querySelectorAll('#page-purchases .mini-stat-val');
-    if (ms[0]) ms[0].textContent = purchases.length;
-    if (ms[1]) ms[1].textContent = '৳' + totalVal.toLocaleString('en-IN', { minimumFractionDigits: 0 });
-    if (ms[2]) ms[2].textContent = pendingCt;
-    if (ms[3]) ms[3].textContent = overdueCt;
-
     updateDashboardFinCards();
 
   } catch (err) {
@@ -552,49 +580,48 @@ async function loadPurchases() {
   }
 }
 
-
 /* ═══════════════════════════════════════════════════════════
-   SAVE NEW PURCHASE ORDER TO SUPABASE
+   UPDATED: SAVE PURCHASE
+   Ensures the supplier_id is passed as a value to the DB.
    ═══════════════════════════════════════════════════════════ */
 async function savePurchaseToDB(formData) {
   try {
-    /* 1. Use supplier id passed directly from form (no lookup needed) */
+    // Ensure supplierId is captured correctly from the form
     const supplierId = formData.supplierId || null;
 
-    /* 2. Resolve first line item — supplier_purchases stores item_id & quantity directly */
     const firstItem = formData.lineItems && formData.lineItems.length
       ? formData.lineItems.filter(li => li.qty > 0)[0]
       : null;
 
-    /* 3. Insert purchase row (no separate line-items table needed) */
+    const payload = {
+        supplier_id: supplierId, 
+        item_id: firstItem?.itemId || null,
+        quantity: firstItem?.qty || 0,
+        paid_amount: parseFloat(formData.productPrice ?? formData.total) || 0,
+        total_amount: parseFloat(formData.total) || 0,
+        payment_status: formData.paymentStatus || 'pending',
+        purchase_date: new Date().toISOString(),
+        direct_expense: parseFloat(formData.directExpense) || 0,
+        additional_expense: parseFloat(formData.additionalExpense) || 0,
+    };
+
     const { data: poRows, error: poErr } = await db
       .from('supplier_purchases')
-      .insert([{
-        supplier_id:         supplierId,
-        item_id:             firstItem?.itemId || null,
-        quantity:            firstItem?.qty    || null,
-        paid_amount:         parseFloat(formData.productPrice ?? formData.total) || 0,
-        total_amount:        parseFloat(formData.total) || 0,
-        payment_status:      formData.paymentStatus || 'pending',
-        purchase_date:       new Date().toISOString(),
-        direct_expense:      parseFloat(formData.directExpense)     || 0,
-        additional_expense:  parseFloat(formData.additionalExpense) || 0,
-      }])
+      .insert([payload])
       .select();
-    if (poErr) throw poErr;
 
-    // Increment stock and accumulate cost_price for every line item
-    // formData.productPrice = qty × unit price (already multiplied before calling this)
+    if (poErr) {
+        console.error("Supabase Insert Error:", poErr);
+        throw poErr;
+    }
+
+    // Update stock logic...
     const totalProductCost = parseFloat(formData.productPrice ?? formData.total) || 0;
     for (const li of (formData.lineItems || [])) {
       if (!li.itemId || li.qty <= 0) continue;
-      const product = products.find(p => p.id === li.itemId);
-      const currentStock = product?.stock ?? 0;
-      const newStock = currentStock + li.qty;
-      // Accumulate total cost paid for this item (qty × unit price)
-      const { data: itemRow } = await db.from('items').select('cost_price').eq('id', li.itemId).single();
-      const existingCost = parseFloat(itemRow?.cost_price || 0);
-      const newCost = existingCost + totalProductCost;
+      const { data: itemRow } = await db.from('items').select('stock_quantity, cost_price').eq('id', li.itemId).single();
+      const newStock = (itemRow?.stock_quantity || 0) + li.qty;
+      const newCost = (parseFloat(itemRow?.cost_price || 0) + totalProductCost);
       await db.from('items').update({ stock_quantity: newStock, cost_price: newCost }).eq('id', li.itemId);
     }
 
