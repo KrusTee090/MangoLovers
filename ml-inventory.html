@@ -419,11 +419,10 @@
           <button class="btn btn-primary" onclick="openNewSale()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Sale</button>
         </div>
       </div>
-      <div class="stat-grid g4" style="margin-bottom:14px">
-        <div class="mini-stat mini-stat-sm fade-up d1"><div class="mini-stat-icon mini-stat-icon-sm" style="background:var(--green-bg)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div><div class="mini-stat-val mini-stat-val-sm" id="sales-stat-revenue" style="color:var(--green)">৳0</div><div class="mini-stat-lbl">Total Revenue</div></div></div>
-        <div class="mini-stat mini-stat-sm fade-up d2"><div class="mini-stat-icon mini-stat-icon-sm" style="background:var(--blue-bg)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div><div><div class="mini-stat-val mini-stat-val-sm" id="sales-stat-count" style="color:var(--blue)">0</div><div class="mini-stat-lbl">Transactions</div></div></div>
-        <div class="mini-stat mini-stat-sm fade-up d3"><div class="mini-stat-icon mini-stat-icon-sm" style="background:var(--mango-bg)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--mango)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="mini-stat-val mini-stat-val-sm" id="sales-stat-pending" style="color:var(--mango-dk)">0</div><div class="mini-stat-lbl">Pending</div></div></div>
-        <div class="mini-stat mini-stat-sm fade-up d4"><div class="mini-stat-icon mini-stat-icon-sm" style="background:#f3f0fd"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div><div class="mini-stat-val mini-stat-val-sm" id="sales-stat-pending-val" style="color:var(--purple)">৳0</div><div class="mini-stat-lbl">Pending Revenue</div></div></div>
+      <div class="stat-grid g3" style="margin-bottom:14px">
+        <div class="mini-stat fade-up d1"><div class="mini-stat-icon" style="background:var(--green-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div><div class="mini-stat-val" style="color:var(--green)">৳3,132</div><div class="mini-stat-lbl">Total Revenue</div></div></div>
+        <div class="mini-stat fade-up d2"><div class="mini-stat-icon" style="background:var(--blue-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div><div><div class="mini-stat-val" style="color:var(--blue)">6</div><div class="mini-stat-lbl">Transactions</div></div></div>
+        <div class="mini-stat fade-up d3"><div class="mini-stat-icon" style="background:var(--mango-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--mango)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="mini-stat-val" style="color:var(--mango-dk)">1</div><div class="mini-stat-lbl">Pending</div></div></div>
       </div>
       <div class="filter-bar">
         <div class="fsearch"><span class="icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><input type="text" placeholder="Search by customer or invoice…" id="salesSearch"></div>
@@ -454,15 +453,15 @@
         <div class="mini-stat fade-up d1"><div class="mini-stat-icon" style="background:var(--blue-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div><div class="mini-stat-val" style="color:var(--blue)">5</div><div class="mini-stat-lbl">Total POs</div></div></div>
         <div class="mini-stat fade-up d2"><div class="mini-stat-icon" style="background:var(--mango-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--mango)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div><div class="mini-stat-val" style="color:var(--mango-dk)">৳28,920</div><div class="mini-stat-lbl">Total Value</div></div></div>
         <div class="mini-stat fade-up d3"><div class="mini-stat-icon" style="background:#f3f0fd"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="mini-stat-val" style="color:var(--purple)">2</div><div class="mini-stat-lbl">Pending</div></div></div>
-        <div class="mini-stat fade-up d4"><div class="mini-stat-icon" style="background:var(--red-bg)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg></div><div><div class="mini-stat-val" style="color:var(--red)">1</div><div class="mini-stat-lbl">Overdue</div></div></div>
+
       </div>
-      <div class="filter-bar">
-        <div class="fsearch"><span class="icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><input type="text" placeholder="Search by supplier or PO number…" id="purchasesSearch"></div>
-        <div class="pill-bar">
+      <div style="display:flex;gap:10px;margin-bottom:8px;align-items:center">
+        <div class="fsearch" style="flex:1"><span class="icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><input type="text" placeholder="Search by supplier or PO number…" id="purchasesSearch"></div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
           <div class="pill active" onclick="filterPurchases('All',this)">All</div>
           <div class="pill" onclick="filterPurchases('Received',this)">Received</div>
           <div class="pill" onclick="filterPurchases('Pending',this)">Pending</div>
-          <div class="pill" onclick="filterPurchases('Overdue',this)">Overdue</div>
         </div>
       <div class="card"><div class="tbl-wrap"><table>
         <thead><tr><th>PO Number</th><th>Supplier</th><th>Items</th><th>Product Price</th><th>Direct Exp.</th><th>Add. Exp.</th><th>Total</th><th>Status</th><th>Order Date</th><th></th></tr></thead>
@@ -1185,6 +1184,15 @@
       <div class="form-group"><label class="form-lbl">Category</label>
         <select id="ap-category" class="form-select">
           <option value="Uncategorized">Uncategorized</option>
+          <option value="গুড় (Molasses)">গুড় (Molasses)</option>
+          <option value="মধু (Honey)">মধু (Honey)</option>
+          <option value="বাদাম ও বীজ (Nuts & Seeds)">বাদাম ও বীজ (Nuts & Seeds)</option>
+          <option value="ঘি (Ghee)">ঘি (Ghee)</option>
+          <option value="তেল (Oil)">তেল (Oil)</option>
+          <option value="আচার (Pickle)">আচার (Pickle)</option>
+          <option value="রস (Juice)">রস (Juice)</option>
+          <option value="শুকনো খাবার (Dry Foods)">শুকনো খাবার (Dry Foods)</option>
+          <option value="অন্যান্য (Others)">অন্যান্য (Others)</option>
         </select>
       </div>
       <div class="form-row">

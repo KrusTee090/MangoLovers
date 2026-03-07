@@ -636,7 +636,10 @@ function viewProduct(p) {
    EDIT PRODUCT MODAL
 ══════════════════════════════════ */
 function editProduct(p) {
-  const cats = [...new Set(products.map(x => x.category))];
+  const _fc = ["গুড় (Molasses)", "মধু (Honey)", "বাদাম ও বীজ (Nuts & Seeds)", "ঘি (Ghee)", "তেল (Oil)", "আচার (Pickle)", "রস (Juice)", "শুকনো খাবার (Dry Foods)", "অন্যান্য (Others)"];
+  const _db = [...new Set(products.map(x=>x.category).filter(Boolean))];
+  const _ex = _db.filter(c=>c!=='Uncategorized'&&!_fc.includes(c)).sort();
+  const cats = ['Uncategorized',..._fc,..._ex];
   openPanel(`
     <div class="feat-hdr">
       <div><h3>Edit Product</h3><p>${p.name}</p></div>
@@ -653,9 +656,7 @@ function editProduct(p) {
       </div>
       <div class="feat-row">
         <div class="feat-field"><label>Category</label>
-          <select id="ep-cat">
-            ${[...new Set([...cats, p.category].filter(Boolean))].map(c=>`<option value="${c}" ${c===p.category?'selected':''}>${c}</option>`).join('')}
-          </select>
+          <select id="ep-cat">${cats.map(c=>`<option value="${c}" ${c===p.category?'selected':''}>${c}</option>`).join('')}</select>
         </div>
         <div class="feat-field"><label>Selling Price (৳)</label>
           <input id="ep-price" type="number" step="0.01" value="${p.price}"></div>
