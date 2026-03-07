@@ -2039,6 +2039,67 @@ function _nsiLineHtml(itemOptions) {
     </div>`;
 }
 
+
+/* ── New Sale: Sale Type toggle ── */
+function _nsiToggleSaleType() {
+  const type = document.getElementById('nsi-sale-type')?.value;
+  const payEl = document.getElementById('nsi-payment');
+  if (!payEl) return;
+  if (type === 'online') {
+    // Suggest bKash/Nagad for online
+    if (payEl.value === 'cash') payEl.value = 'bkash';
+  }
+}
+
+/* ── New Sale: Customer combobox ── */
+function _nsiCustomerInput() {
+  const input = document.getElementById('nsi-customer-input');
+  const dd    = document.getElementById('nsi-customer-dropdown');
+  const idEl  = document.getElementById('nsi-customer-id');
+  if (!input || !dd) return;
+
+  const q = input.value.toLowerCase().trim();
+  idEl.value = ''; // clear id when typing
+
+  const matches = q
+    ? customers.filter(c => c.name.toLowerCase().includes(q)).slice(0, 8)
+    : customers.slice(0, 8);
+
+  if (matches.length === 0 && q.length > 0) {
+    dd.style.display = 'block';
+    dd.innerHTML = `<div style="padding:8px 12px;font-size:12px;color:#888">
+      No match — will save as "<b style='color:#333'>${input.value}</b>"</div>`;
+    return;
+  }
+
+  if (matches.length === 0) { dd.style.display = 'none'; return; }
+
+  dd.style.display = 'block';
+  dd.innerHTML = matches.map(c => `
+    <div style="padding:8px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px solid #eef2ef;color:#1a2e22"
+      onmousedown="event.preventDefault()"
+      onclick="_nsiPickCustomer('${c.id}','${c.name.replace(/'/g,'\\\'')}')">
+      <span style="font-weight:600;color:#1a2e22">${c.name}</span>
+      ${c.phone && c.phone !== '—' ? `<span style="font-size:11px;color:#7a9a86;margin-left:6px">${c.phone}</span>` : ''}
+    </div>`).join('');
+}
+
+function _nsiPickCustomer(id, name) {
+  const input = document.getElementById('nsi-customer-input');
+  const idEl  = document.getElementById('nsi-customer-id');
+  const dd    = document.getElementById('nsi-customer-dropdown');
+  if (input) input.value = name;
+  if (idEl)  idEl.value  = id;
+  if (dd)    dd.style.display = 'none';
+}
+
+function _nsiCustomerBlur() {
+  setTimeout(() => {
+    const dd = document.getElementById('nsi-customer-dropdown');
+    if (dd) dd.style.display = 'none';
+  }, 150);
+}
+
 function openNewSale() {
   const customerOptions = customers
     .map(c => `<option value="${c.id||''}" data-name="${c.name}">${c.name}</option>`).join('');
@@ -2053,10 +2114,10 @@ function openNewSale() {
     </div>
     <div class="feat-body">
       <div class="feat-row">
-        <div class="feat-field"><label>Customer</label>
-          <select id="nsi-customer">
-            <option value="">— Walk-in / Select Customer —</option>
-            ${customerOptions}
+        <div class="feat-field"><label>Sale Type</label>
+          <select id="nsi-sale-type" onchange="_nsiToggleSaleType()">
+            <option value="walkin">Walk-in</option>
+            <option value="online">Online</option>
           </select>
         </div>
         <div class="feat-field"><label>Payment Method</label>
@@ -2066,6 +2127,16 @@ function openNewSale() {
             <option value="bkash">bKash</option>
             <option value="nagad">Nagad</option>
           </select>
+        </div>
+      </div>
+      <div class="feat-field" id="nsi-customer-wrap">
+        <label>Customer <span style="font-size:10px;color:var(--text-faint)">(optional — type name or pick existing)</span></label>
+        <div style="position:relative">
+          <input id="nsi-customer-input" type="text" placeholder="Type customer name or search…" autocomplete="off"
+            style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12.5px;font-family:inherit;box-sizing:border-box"
+            oninput="_nsiCustomerInput()" onfocus="_nsiCustomerInput()" onblur="_nsiCustomerBlur()">
+          <input id="nsi-customer-id" type="hidden" value="">
+          <div id="nsi-customer-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;background:#ffffff;border:1px solid #d0ddd6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-height:180px;overflow-y:auto;margin-top:2px"></div>
         </div>
       </div>
       <div class="feat-field">
@@ -2281,7 +2352,9 @@ function _nsiRecalcTotal() {
 }
 
 async function _submitNewSale() {
-  const customerId = document.getElementById('nsi-customer').value || null;
+  const customerId   = document.getElementById('nsi-customer-id')?.value || null;
+  const customerName = document.getElementById('nsi-customer-input')?.value?.trim() || null;
+  const saleType     = document.getElementById('nsi-sale-type')?.value || 'walkin';
   const paymentMethod = document.getElementById('nsi-payment').value;
   const paymentStatus = document.getElementById('nsi-status').value;
 
@@ -2312,7 +2385,7 @@ async function _submitNewSale() {
         customer_id:     customerId || null,
         total_amount:    saleTotal,
         discount_amount: parseFloat(document.getElementById('nsi-discount-amount')?.value) || 0,
-        payment_type:    paymentMethod,
+        payment_type:    saleType === 'online' ? 'online' : paymentMethod,
         payment_status:  paymentStatus,
         sale_date:       new Date().toISOString(),
       }])

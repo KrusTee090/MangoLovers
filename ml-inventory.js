@@ -40,7 +40,6 @@ const purchases=[
   {id:'PO-2024-0411',supplier:'Apple Premium Reseller',items:10,total:9500,status:'Pending',date:'2024-02-12',dueDate:'2024-03-12'},
   {id:'PO-2024-0410',supplier:'Nike Bangladesh',items:50,total:3600,status:'In Transit',date:'2024-02-10',dueDate:'2024-03-10'},
   {id:'PO-2024-0409',supplier:"Nature's Best",items:200,total:1100,status:'Received',date:'2024-02-08',dueDate:'2024-03-08'},
-  {id:'PO-2024-0408',supplier:'FurniCo Ltd',items:8,total:2240,status:'Overdue',date:'2024-01-28',dueDate:'2024-02-12'},
 ];
 const customers=[
   {id:'CUS-001',name:'Rafiq Ahmed',phone:'+880-1711-123456',email:'rafiq@email.com',totalPurchases:12,totalSpent:8420,outstanding:0,status:'Active'},
@@ -94,7 +93,6 @@ const statusBadge = s => {
     'Out of Stock':['b-red',    xCircSvg],
     'Refunded':    ['b-red',    rotateSvg],
     'Returned':    ['b-red',    rotateSvg],
-    'Overdue':     ['b-red',    warnSvg],
     'Inactive':    ['b-grey',   ''],
   };
   const [cls, icon] = map[s] || ['b-grey',''];
@@ -736,7 +734,7 @@ function renderSalesTable(){
     <td><div style="font-size:10.5px;color:var(--text-faint);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.lineItems&&s.lineItems.length?s.lineItems.map(li=>li.id||'').filter(Boolean).join(', '):'—'}</div></td>
     <td><div style="font-size:11.5px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.itemSummary||''}"><span class="mono" style="color:var(--text-soft)">${s.items}</span> · ${s.itemSummary||'—'}</div></td>
     <td>${s.discount>0?`<span class="mono" style="font-size:11.5px;color:var(--red)">−৳${fmt(s.discount)}</span>`:'<span style="color:var(--text-faint)">—</span>'}</td>
-    <td><span class="mono" style="font-weight:700">৳${fmt(s.total)}</span></td>
+    <td><span class="mono" style="font-weight:700;${s.status==='Returned'?'text-decoration:line-through;opacity:0.5':''}">৳${fmt(s.total)}</span></td>
     <td><span style="font-size:11.5px;${paymentColor(s.payment)}">${s.payment}</span></td>
     <td>${statusBadge(s.status)}</td>
     <td><span class="mono" style="font-size:10.5px;color:var(--text-faint)">${s.date}</span></td>
@@ -790,9 +788,20 @@ function renderPurchases(){
 
   if (filtered.length === 0) {
     document.getElementById('purchasesTbody').innerHTML =
-      `<tr><td colspan="11" style="text-align:center;color:var(--text-soft);padding:24px">No purchase orders found.</td></tr>`;
+      `<tr><td colspan="10" style="text-align:center;color:var(--text-soft);padding:24px">No purchase orders found.</td></tr>`;
     return;
   }
+
+  // Update mini-stats from full purchases array (not filtered)
+  const _purTotal = purchases.length;
+  const _purValue = purchases.filter(p => (p.status||'').toLowerCase() !== 'returned').reduce((s, p) => s + (p.productPrice||0) + (p.directExpense||0) + (p.additionalExpense||0), 0);
+  const _purPending = purchases.filter(p => (p.status||'').toLowerCase() === 'pending').length;
+  const _elPOs  = document.querySelector('#page-purchases .mini-stat:nth-child(1) .mini-stat-val');
+  const _elVal  = document.querySelector('#page-purchases .mini-stat:nth-child(2) .mini-stat-val');
+  const _elPend = document.querySelector('#page-purchases .mini-stat:nth-child(3) .mini-stat-val');
+  if (_elPOs)  _elPOs.textContent  = _purTotal;
+  if (_elVal)  _elVal.textContent  = '৳' + _purValue.toLocaleString('en-IN', {minimumFractionDigits:0});
+  if (_elPend) _elPend.textContent = _purPending;
 
   document.getElementById('purchasesTbody').innerHTML=filtered.map((po,i)=>{
     // Re-resolve supplier name live from suppliersData in case it wasn't set at load time
@@ -809,7 +818,6 @@ function renderPurchases(){
     <td><span class="mono" style="font-weight:700;color:var(--mint)">৳${((po.productPrice||0)+(po.directExpense||0)+(po.additionalExpense||0)).toLocaleString()}</span></td>
     <td>${statusBadge(po.status)}</td>
     <td><span class="mono" style="font-size:11.5px;color:var(--text-soft)">${po.date}</span></td>
-    <td><span class="mono" style="font-size:11.5px;${po.status==='Overdue'?'color:var(--red);font-weight:700':'color:var(--text-soft)'}">${po.dueDate}</span></td>
     <td><div class="act-group">
       <button class="act-btn" title="View" onclick="_poAction('view',${purchases.indexOf(po)})">${svgIcon(eyeSvg,12)}</button>
       <button class="act-btn edit" title="Edit" onclick="_poAction('edit',${purchases.indexOf(po)})">${svgIcon(editSvg,12)}</button>
@@ -894,7 +902,12 @@ function renderSalesReturns(){
       </div>
     </td></tr>`;
   } else {
-    const _srFiltered = salesReturns.filter(r => _dateInRange(r.date, _returnsDateFilter));
+    const _srSearch = (document.getElementById('returnsSearch')?.value || '').toLowerCase();
+    const _srFiltered = salesReturns.filter(r =>
+      _dateInRange(r.date, _returnsDateFilter) &&
+      (!_srSearch || r.id.toLowerCase().includes(_srSearch) || r.customer.toLowerCase().includes(_srSearch) ||
+       r.product.toLowerCase().includes(_srSearch) || r.invoiceId.toLowerCase().includes(_srSearch))
+    );
     tbody.innerHTML = _srFiltered.map((r,i) => `<tr style="animation:fadeUp .3s ease ${i*45}ms both">
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${r.id}</span></td>
     <td><span class="mono" style="color:var(--text-soft);font-size:11.5px">${r.invoiceId}</span></td>
@@ -936,8 +949,13 @@ function renderPurchaseReturns(){
       </div>
     </td></tr>`;
   } else {
-    const _prFiltered = purchaseReturns.filter(r => _dateInRange(r.date, _returnsDateFilter));
-        tbody.innerHTML = purchaseReturns.map((r,i) => `<tr style="animation:fadeUp .3s ease ${i*45}ms both">
+    const _prSearch = (document.getElementById('returnsSearch')?.value || '').toLowerCase();
+    const _prFiltered = purchaseReturns.filter(r =>
+      _dateInRange(r.date, _returnsDateFilter) &&
+      (!_prSearch || r.id.toLowerCase().includes(_prSearch) || r.supplier.toLowerCase().includes(_prSearch) ||
+       r.product.toLowerCase().includes(_prSearch) || r.poId.toLowerCase().includes(_prSearch))
+    );
+        tbody.innerHTML = _prFiltered.map((r,i) => `<tr style="animation:fadeUp .3s ease ${i*45}ms both">
     <td><span class="mono" style="color:var(--mint);font-size:11.5px">${r.id}</span></td>
     <td><span class="mono" style="color:var(--text-soft);font-size:11.5px">${r.poId}</span></td>
     <td style="font-weight:600">${r.supplier}</td>
@@ -947,8 +965,8 @@ function renderPurchaseReturns(){
     <td style="font-size:12px;color:var(--text-soft)">${r.date}</td>
     <td>${statusBadge(r.status)}</td>
     <td><div class="act-group">
-      <button class="act-btn" title="View" onclick="viewPurchaseReturn(purchaseReturns[${i}])">${svgIcon(eyeSvg,12)}</button>
-      <button class="act-btn" title="Print" onclick="printPurchaseReturn(purchaseReturns[${i}])">${svgIcon(printSvg,12)}</button>
+      <button class="act-btn" title="View" onclick="viewPurchaseReturn(_prFiltered[${i}])">${svgIcon(eyeSvg,12)}</button>
+      <button class="act-btn" title="Print" onclick="printPurchaseReturn(_prFiltered[${i}])">${svgIcon(printSvg,12)}</button>
     </div></td>
   </tr>`).join('');
   }
