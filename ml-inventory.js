@@ -593,18 +593,23 @@ document.addEventListener('click', e => {
   }
 });
 
-const _FIXED_CATS = ["গুড় (Molasses)", "মধু (Honey)", "বাদাম ও বীজ (Nuts & Seeds)", "ঘি (Ghee)", "তেল (Oil)", "আচার (Pickle)", "রস (Juice)", "শুকনো খাবার (Dry Foods)", "অন্যান্য (Others)"];
+// Category names come from the DB (dbCategories global in ml-supabase.js)
+function _getCatNames() {
+  if (typeof dbCategories !== 'undefined' && dbCategories.length) {
+    return dbCategories.map(c => c.name);
+  }
+  // Fallback to hardcoded list if DB hasn't loaded yet
+  return ["গুড় Molasses","মধু Honey","বাদাম Nuts","বীজ Seeds","ঘি Ghee","তেল Oil","আচার Pickle","রস Juice","শুকনো খাবার Dry foods","অন্যান্য Others"];
+}
+
 let pCatFilter='All', pStatFilter='All', pItemStatFilter='All';
 
 function renderCatPills(){ renderCatSelect(); }
 function renderCatSelect(){
   const sel = document.getElementById('catFilter');
   if (!sel) return;
-  const dbCats = [...new Set((products||[]).map(p=>p.category).filter(Boolean))];
-  const extras = dbCats.filter(c => c!=='Uncategorized' && !_FIXED_CATS.includes(c)).sort();
-  const all = [..._FIXED_CATS, ...extras];
+  const all = _getCatNames();
   sel.innerHTML = '<option value="All">All Categories</option>'
-    + '<option value="Uncategorized">Uncategorized</option>'
     + all.map(c=>`<option value="${c}" ${c===pCatFilter?'selected':''}>${c}</option>`).join('');
 }
 function setCatF(cat, el){
@@ -664,21 +669,115 @@ document.getElementById('statusFilter').addEventListener('change',e=>{pStatFilte
 document.getElementById('itemStatFilter').addEventListener('change',e=>{pItemStatFilter=e.target.value;renderProducts();});
 
 function renderCategories(){
-  const cats={};
-  products.forEach(p=>{
-    if(!cats[p.category])cats[p.category]={count:0,stock:0,prices:[]};
-    cats[p.category].count++;cats[p.category].stock+=p.stock;cats[p.category].prices.push(p.price);
+  const cats = typeof dbCategories !== 'undefined' ? dbCategories : [];
+  const tbody = document.getElementById('categoriesTbody');
+  if (!tbody) return;
+
+  if (!cats.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-faint);padding:32px">No categories yet. Click "Add Category" to create one.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = cats.map(cat => {
+    const prods = (products || []).filter(p => p.category === cat.name);
+    const totalStock = prods.reduce((a,p) => a + (p.stock||0), 0);
+    const avgPrice = prods.length
+      ? (prods.reduce((a,p) => a + (p.price||0), 0) / prods.length).toFixed(2)
+      : '0.00';
+    return `<tr>
+      <td><div class="prod-cell">
+        <div class="prod-thumb">${svgIcon('<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',14)}</div>
+        <span style="font-weight:600">${cat.name}</span>
+      </div></td>
+      <td class="mono">${prods.length}</td>
+      <td class="mono">${totalStock.toLocaleString()}</td>
+      <td class="mono">৳${avgPrice}</td>
+      <td><div class="act-group" style="opacity:1">
+        <button class="act-btn edit" title="Edit" onclick="openEditCategory(${cat.id},'${cat.name.replace(/'/g,"\\'")}')">${svgIcon(editSvg,12)}</button>
+        <button class="act-btn danger" title="Delete" onclick="confirmDeleteCategory(${cat.id},'${cat.name.replace(/'/g,"\\'")}')">${svgIcon(trashSvg,12)}</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function openAddCategory(){
+  openPanel(`
+    <div class="feat-hdr">
+      <div><h3>Add Category</h3><p>Create a new product category</p></div>
+      <button class="feat-close" onclick="closePanel()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="feat-body">
+      <div class="feat-field">
+        <label>Category Name</label>
+        <input id="nc-name" placeholder="e.g. Spices" autofocus>
+      </div>
+    </div>
+    <div class="feat-footer">
+      <button class="btn btn-outline" onclick="closePanel()">Cancel</button>
+      <button class="btn btn-primary" onclick="_submitAddCategory()">Add Category</button>
+    </div>
+  `, '380px');
+}
+
+async function _submitAddCategory(){
+  const name = document.getElementById('nc-name')?.value?.trim();
+  if (!name) { toast('Please enter a category name', 'error'); return; }
+  const btn = document.querySelector('.feat-footer .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  const res = await saveCategory(name);
+  if (res.success) {
+    toast(`Category "${name}" added ✓`);
+    closePanel();
+  } else {
+    toast('Error: ' + res.error, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Add Category'; }
+  }
+}
+
+function openEditCategory(id, currentName){
+  openPanel(`
+    <div class="feat-hdr">
+      <div><h3>Edit Category</h3><p>${currentName}</p></div>
+      <button class="feat-close" onclick="closePanel()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="feat-body">
+      <div class="feat-field">
+        <label>Category Name</label>
+        <input id="ec-name" value="${currentName}">
+      </div>
+    </div>
+    <div class="feat-footer">
+      <button class="btn btn-outline" onclick="closePanel()">Cancel</button>
+      <button class="btn btn-primary" onclick="_submitEditCategory(${id})">Save Changes</button>
+    </div>
+  `, '380px');
+}
+
+async function _submitEditCategory(id){
+  const name = document.getElementById('ec-name')?.value?.trim();
+  if (!name) { toast('Category name cannot be empty', 'error'); return; }
+  const btn = document.querySelector('.feat-footer .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  const res = await updateCategory(id, name);
+  if (res.success) {
+    toast(`Category updated ✓`);
+    closePanel();
+  } else {
+    toast('Error: ' + res.error, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
+  }
+}
+
+function confirmDeleteCategory(id, name){
+  if (!confirm(`Delete category "${name}"?\n\nProducts in this category will not be deleted.`)) return;
+  deleteCategory(id).then(res => {
+    if (res.success) toast(`Category "${name}" deleted`);
+    else toast('Error: ' + res.error, 'error');
   });
-  document.getElementById('categoriesTbody').innerHTML=Object.entries(cats).map(([cat,d])=>`<tr>
-    <td><div class="prod-cell">
-      <div class="prod-thumb">${svgIcon('<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',14)}</div>
-      <span style="font-weight:600">${cat}</span>
-    </div></td>
-    <td class="mono">${d.count}</td>
-    <td class="mono">${d.stock.toLocaleString()}</td>
-    <td class="mono">৳${(d.prices.reduce((a,b)=>a+b,0)/d.prices.length).toFixed(2)}</td>
-    <td><div class="act-group" style="opacity:1">${svgIcon(editSvg,12)} ${svgIcon(trashSvg,12)}</div></td>
-  </tr>`).join('');
 }
 
 
@@ -725,8 +824,8 @@ function returnsDateFilter(range, el) {
   _returnsDateFilter = range;
   el.closest('.pill-bar').querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
   el.classList.add('active');
-  renderSalesReturnsTable();
-  renderPurchaseReturnsTable();
+  renderSalesReturns();
+  renderPurchaseReturns();
 }
 
 let salesFilter='All';
@@ -931,8 +1030,8 @@ function renderSalesReturns(){
     <td style="font-size:12px;color:var(--text-soft)">${r.date}</td>
     <td>${statusBadge(r.status)}</td>
     <td><div class="act-group">
-      <button class="act-btn" title="View" onclick="viewSalesReturn(_srFiltered[${i}])">${svgIcon(eyeSvg,12)}</button>
-      <button class="act-btn" title="Print" onclick="printSalesReturn(_srFiltered[${i}])">${svgIcon(printSvg,12)}</button>
+      <button class="act-btn" title="View" onclick="viewSalesReturn(salesReturns.find(x=>x.id==='${r.id}'))">${svgIcon(eyeSvg,12)}</button>
+      <button class="act-btn" title="Print" onclick="printSalesReturn(salesReturns.find(x=>x.id==='${r.id}'))">${svgIcon(printSvg,12)}</button>
     </div></td>
   </tr>`).join('');
   }
@@ -978,8 +1077,8 @@ function renderPurchaseReturns(){
     <td style="font-size:12px;color:var(--text-soft)">${r.date}</td>
     <td>${statusBadge(r.status)}</td>
     <td><div class="act-group">
-      <button class="act-btn" title="View" onclick="viewPurchaseReturn(_prFiltered[${i}])">${svgIcon(eyeSvg,12)}</button>
-      <button class="act-btn" title="Print" onclick="printPurchaseReturn(_prFiltered[${i}])">${svgIcon(printSvg,12)}</button>
+      <button class="act-btn" title="View" onclick="viewPurchaseReturn(purchaseReturns.find(x=>x.id==='${r.id}'))">${svgIcon(eyeSvg,12)}</button>
+      <button class="act-btn" title="Print" onclick="printPurchaseReturn(purchaseReturns.find(x=>x.id==='${r.id}'))">${svgIcon(printSvg,12)}</button>
     </div></td>
   </tr>`).join('');
   }
@@ -1004,11 +1103,8 @@ function renderAnalytics(){
 function openModal(){
   const sel = document.getElementById('ap-category');
   if (sel) {
-    const dbCats = [...new Set((products||[]).map(p=>p.category).filter(Boolean))];
-    const extras = dbCats.filter(c => c!=='Uncategorized' && !_FIXED_CATS.includes(c)).sort();
-    const all = [..._FIXED_CATS, ...extras];
-    sel.innerHTML = '<option value="Uncategorized">Uncategorized</option>'
-      + all.map(c=>`<option value="${c}">${c}</option>`).join('');
+    const all = _getCatNames();
+    sel.innerHTML = all.map(c=>`<option value="${c}">${c}</option>`).join('');
   }
   document.getElementById('modalOverlay').classList.add('open');
 }

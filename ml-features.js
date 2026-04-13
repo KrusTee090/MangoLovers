@@ -636,10 +636,9 @@ function viewProduct(p) {
    EDIT PRODUCT MODAL
 ══════════════════════════════════ */
 function editProduct(p) {
-  const _fc = ["গুড় (Molasses)", "মধু (Honey)", "বাদাম ও বীজ (Nuts & Seeds)", "ঘি (Ghee)", "তেল (Oil)", "আচার (Pickle)", "রস (Juice)", "শুকনো খাবার (Dry Foods)", "অন্যান্য (Others)"];
-  const _db = [...new Set(products.map(x=>x.category).filter(Boolean))];
-  const _ex = _db.filter(c=>c!=='Uncategorized'&&!_fc.includes(c)).sort();
-  const cats = ['Uncategorized',..._fc,..._ex];
+  const cats = (typeof dbCategories !== 'undefined' && dbCategories.length)
+    ? dbCategories.map(c => c.name)
+    : ["গুড় Molasses","মধু Honey","বাদাম Nuts","বীজ Seeds","ঘি Ghee","তেল Oil","আচার Pickle","রস Juice","শুকনো খাবার Dry foods","অন্যান্য Others"];
   openPanel(`
     <div class="feat-hdr">
       <div><h3>Edit Product</h3><p>${p.name}</p></div>
@@ -709,11 +708,17 @@ async function _saveEditProduct(pid) {
   // Supabase update (if connected)
   if (typeof db !== 'undefined') {
     try {
+      // Resolve category name → category_id
+      const catObj = (typeof dbCategories !== 'undefined')
+        ? dbCategories.find(c => c.name === category)
+        : null;
       const { error } = await db.from('items').update({
-        name, barcode: sku, category,
-        selling_price: price,
+        name,
+        barcode:        sku,
+        category_id:    catObj ? catObj.id : null,
+        selling_price:  price,
         stock_quantity: stock,
-        status: itemStatus,
+        status:         itemStatus,
       }).eq('id', pid);
       if (error) throw error;
     } catch (err) {

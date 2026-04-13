@@ -341,16 +341,6 @@
         </div>
         <select class="fselect" id="catFilter" onchange="setCatFromSelect(this.value)">
           <option value="All">All Categories</option>
-          <option value="Uncategorized">Uncategorized</option>
-          <option value="গুড় (Molasses)">গুড় (Molasses)</option>
-          <option value="মধু (Honey)">মধু (Honey)</option>
-          <option value="বাদাম ও বীজ (Nuts & Seeds)">বাদাম ও বীজ (Nuts & Seeds)</option>
-          <option value="ঘি (Ghee)">ঘি (Ghee)</option>
-          <option value="তেল (Oil)">তেল (Oil)</option>
-          <option value="আচার (Pickle)">আচার (Pickle)</option>
-          <option value="রস (Juice)">রস (Juice)</option>
-          <option value="শুকনো খাবার (Dry Foods)">শুকনো খাবার (Dry Foods)</option>
-          <option value="অন্যান্য (Others)">অন্যান্য (Others)</option>
         </select>
         <select class="fselect" id="itemStatFilter" onchange="setItemStatF(this.value)">
           <option value="All">All Items</option>
@@ -378,7 +368,7 @@
     <div class="page-section" id="page-categories">
       <div class="section-hdr">
         <div><h2>Categories</h2><p>Manage product categories</p></div>
-        <button class="btn btn-primary"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Category</button>
+        <button class="btn btn-primary" onclick="openAddCategory()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Category</button>
       </div>
       <div class="card">
         <div class="tbl-wrap"><table>
@@ -1183,16 +1173,7 @@
       </div>
       <div class="form-group"><label class="form-lbl">Category</label>
         <select id="ap-category" class="form-select">
-          <option value="Uncategorized">Uncategorized</option>
-          <option value="গুড় (Molasses)">গুড় (Molasses)</option>
-          <option value="মধু (Honey)">মধু (Honey)</option>
-          <option value="বাদাম ও বীজ (Nuts & Seeds)">বাদাম ও বীজ (Nuts & Seeds)</option>
-          <option value="ঘি (Ghee)">ঘি (Ghee)</option>
-          <option value="তেল (Oil)">তেল (Oil)</option>
-          <option value="আচার (Pickle)">আচার (Pickle)</option>
-          <option value="রস (Juice)">রস (Juice)</option>
-          <option value="শুকনো খাবার (Dry Foods)">শুকনো খাবার (Dry Foods)</option>
-          <option value="অন্যান্য (Others)">অন্যান্য (Others)</option>
+          <option value="">Loading categories…</option>
         </select>
       </div>
       <div class="form-row">
