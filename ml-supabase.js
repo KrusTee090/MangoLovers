@@ -720,13 +720,14 @@
    function psrQuickFilter(range) {
      const now = new Date();
      const pad = n => String(n).padStart(2, '0');
-     const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+     // Use UTC to match dates stored via toISOString()
+     const ymd = d => `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
      let from, to;
      if (range === 'all')        { from = null; to = null; }
      else if (range === 'today') { from = to = ymd(now); }
-     else if (range === 'week')  { const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay()+6)%7)); from = ymd(mon); to = ymd(now); }
-     else if (range === 'month') { from = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`; to = ymd(now); }
-     else if (range === 'year')  { from = `${now.getFullYear()}-01-01`; to = ymd(now); }
+     else if (range === 'week')  { const mon = new Date(now); mon.setUTCDate(now.getUTCDate() - ((now.getUTCDay()+6)%7)); from = ymd(mon); to = ymd(now); }
+     else if (range === 'month') { from = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-01`; to = ymd(now); }
+     else if (range === 'year')  { from = `${now.getUTCFullYear()}-01-01`; to = ymd(now); }
      ['all','today','week','month','year'].forEach(k => {
        const el = document.getElementById(`psr-pill-${k}`);
        if (el) el.classList.toggle('active', k === range);
@@ -1342,13 +1343,13 @@
      } else if (range === 'today') {
        from = to = ymd(now);
      } else if (range === 'week') {
-       const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay()+6)%7));
+       const mon = new Date(now); mon.setUTCDate(now.getUTCDate() - ((now.getUTCDay()+6)%7));
        from = ymd(mon); to = ymd(now);
      } else if (range === 'month') {
-       from = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
+       from = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-01`;
        to   = ymd(now);
      } else if (range === 'year') {
-       from = `${now.getFullYear()}-01-01`;
+       from = `${now.getUTCFullYear()}-01-01`;
        to   = ymd(now);
      }
    
@@ -1619,7 +1620,7 @@
      } else if (range === 'month') {
        from = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
      } else if (range === 'year') {
-       from = `${now.getFullYear()}-01-01`;
+       from = `${now.getUTCFullYear()}-01-01`;
      } else {
        from = null; to = null;
      }
@@ -1999,17 +2000,18 @@
    function srQuickFilter(range) {
      const now = new Date();
      const pad = n => String(n).padStart(2,'0');
-     const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+     // Use UTC to match dates stored via toISOString()
+     const ymd = d => `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
      let from, to;
    
      if (range === 'all')        { from = null; to = null; }
      else if (range === 'today') { from = to = ymd(now); }
      else if (range === 'week')  {
-       const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay()+6)%7));
+       const mon = new Date(now); mon.setUTCDate(now.getUTCDate() - ((now.getUTCDay()+6)%7));
        from = ymd(mon); to = ymd(now);
      }
-     else if (range === 'month') { from = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`; to = ymd(now); }
-     else if (range === 'year')  { from = `${now.getFullYear()}-01-01`; to = ymd(now); }
+     else if (range === 'month') { from = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-01`; to = ymd(now); }
+     else if (range === 'year')  { from = `${now.getUTCFullYear()}-01-01`; to = ymd(now); }
    
      ['all','today','week','month','year'].forEach(k => {
        const el = document.getElementById(`sr-pill-${k}`);
