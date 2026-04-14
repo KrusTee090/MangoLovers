@@ -832,7 +832,8 @@
        const from = _psrFrom, to = _psrTo;
        const inRange = date => {
          if (!from && !to) return true;
-         const d = (date || '').split('T')[0];
+         // Dates are stored as "2024-01-15 14:30" (space) or ISO "2024-01-15T14:30" — extract YYYY-MM-DD
+         const d = (date || '').slice(0, 10);
          if (from && d < from) return false;
          if (to   && d > to)   return false;
          return true;
